@@ -1,0 +1,108 @@
+# ── CRYPTO DINONAKTIFKAN (fokus saham IDX) ──────────────────────────────
+# Uncomment blok price_poller_* + sentiment_fetcher untuk mengaktifkan lagi.
+# PricePollerJob = satu-satunya pemicu data & signal eval crypto; mematikannya
+# menghentikan seluruh pipeline crypto di sumber. Set juga CRYPTO_ENABLED=true.
+#
+# price_poller_5m:
+#   class: PricePollerJob
+#   schedule: "* * * * *"               # every 1 min
+#   args: [{ timeframe: "5m" }]
+#   queue: realtime
+#
+# price_poller_15m:
+#   class: PricePollerJob
+#   schedule: "*/3 * * * *"             # every 3 min
+#   args: [{ timeframe: "15m" }]
+#   queue: realtime
+#
+# price_poller_1h:
+#   class: PricePollerJob
+#   schedule: "*/10 * * * *"            # every 10 min
+#   args: [{ timeframe: "1h" }]
+#   queue: realtime
+#
+# price_poller_4h:
+#   class: PricePollerJob
+#   schedule: "0 * * * *"               # every hour
+#   args: [{ timeframe: "4h" }]
+#   queue: realtime
+#
+# price_poller_1d:
+#   class: PricePollerJob
+#   schedule: "0 */6 * * *"             # every 6 hours
+#   args: [{ timeframe: "1d" }]
+#   queue: realtime
+# ─────────────────────────────────────────────────────────────────────────
+
+stock_poller:
+  class: StockPollerJob
+  schedule: "*/30 * * * *"            # every 30 min (raised from 15 since universe is large)
+  queue: scan
+  description: "Fetch IDX candles for full universe (skips if market closed)"
+
+# Fear & Greed Index = sentimen crypto; dinonaktifkan bersama crypto.
+# sentiment_fetcher:
+#   class: SentimentFetcherJob
+#   schedule: "*/15 * * * *"
+#   queue: default
+#   description: "Fetch Fear & Greed Index"
+
+idx_universe_refresh:
+  command: "IdxUniverseService.refresh!"
+  schedule: "0 22 * * *"              # 22:00 UTC = 05:00 WIB daily
+  queue: default
+  description: "Refresh full IDX universe (all listed companies)"
+
+idx_scanner:
+  class: IdxScannerJob
+  schedule: "30 9 * * 1-5"            # 09:30 UTC = 16:30 WIB weekdays
+  queue: scan
+  description: "Scan all IDX listed stocks, pick top swing candidates"
+
+momentum_snapshot:
+  class: MomentumSnapshotJob
+  schedule: "0 10 * * 1-5"            # 10:00 UTC = 17:00 WIB, setelah idx_scanner (09:30)
+  queue: default
+  description: "Rekam regime + top-10 momentum harian (forward tracking)"
+
+telegram_poller:
+  class: TelegramPollerJob
+  schedule: "* * * * *"               # tiap menit — poll perintah bot (no-op tanpa admin chat id)
+  queue: realtime
+  description: "Poll perintah Telegram (admin-only command bot)"
+
+momentum_weekly_report:
+  class: MomentumWeeklyReportJob
+  schedule: "30 10 * * 5"             # Jumat 17:30 WIB — rekonsiliasi momentum vs IHSG vs backtest
+  queue: default
+  description: "Laporan mingguan trust-loop momentum (forward vs backtest + kontrol negatif)"
+
+paper_trade_updater:
+  class: PaperTradeUpdaterJob
+  schedule: "*/5 * * * *"
+  queue: default
+  description: "Update open paper trades"
+
+daily_summary:
+  class: DailySummaryJob
+  schedule: "0 10 * * *"              # 10:00 UTC = 17:00 WIB (sore, post-market)
+  queue: default
+  description: "Send daily Telegram digest: signals, P&L, win rate"
+
+candle_prune:
+  class: CandlePruneJob
+  schedule: "15 3 * * *"              # daily 03:15 UTC — keep tables bounded
+  queue: default
+  description: "Delete candles older than per-timeframe retention window"
+
+failed_job_alert:
+  class: FailedJobAlertJob
+  schedule: "*/15 * * * *"
+  queue: default
+  description: "Telegram alert for newly failed background jobs"
+
+health_monitor:
+  class: HealthMonitorJob
+  schedule: "*/5 * * * *"
+  queue: default
+  description: "Watchdog: alert on stale data or dead Solid Queue workers"

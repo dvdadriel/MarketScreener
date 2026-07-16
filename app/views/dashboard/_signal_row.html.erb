@@ -1,0 +1,89 @@
+<% meta = signal.metadata || {} %>
+<% is_stock = signal.asset_type == "stock" %>
+<% is_buy   = signal.signal_type == "BUY" %>
+<tr id="<%= dom_id(signal) %>" class="hover:bg-zinc-900/50 transition-colors group">
+  <!-- Symbol -->
+  <td class="px-5 py-3">
+    <div class="flex items-center gap-2.5">
+      <% if is_stock %>
+        <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-sky-600 to-blue-700 flex items-center justify-center text-[10px] font-bold text-white">JK</div>
+      <% else %>
+        <div class="h-7 w-7 rounded-lg bg-gradient-to-br from-orange-500 to-amber-600 flex items-center justify-center text-[10px] font-bold text-white">$</div>
+      <% end %>
+      <div>
+        <div class="font-mono font-semibold text-white text-sm">
+          <% if is_stock %>
+            <%= signal.symbol.sub(".JK", "") %>
+          <% else %>
+            <%= signal.symbol.sub("USDT", "") %><span class="text-zinc-600">/USDT</span>
+          <% end %>
+        </div>
+        <% if meta["timeframe"] && meta["timeframe"] != "multi" %>
+          <div class="text-[10px] text-zinc-600 font-mono"><%= meta["timeframe"] %></div>
+        <% end %>
+      </div>
+    </div>
+  </td>
+
+  <!-- Strategy + confluence info -->
+  <td class="px-5 py-3">
+    <div class="text-xs font-mono text-zinc-400"><%= signal.strategy %></div>
+    <% if meta["confluence"] %>
+      <div class="text-[10px] text-emerald-400 mt-0.5 flex items-center gap-1">
+        <span>✓</span><span><%= meta["confluence"] %></span>
+        <span class="text-zinc-700">·</span>
+        <span class="<%= meta["trend"] == "bullish" ? 'text-emerald-400' : meta["trend"] == "bearish" ? 'text-rose-400' : 'text-zinc-500' %>">
+          trend <%= meta["trend"] %>
+        </span>
+      </div>
+    <% end %>
+    <% if (ns = meta["news_sentiment"]) %>
+      <div class="text-[10px] mt-0.5 flex items-center gap-1 <%= ns["label"] == "bullish" ? 'text-emerald-400' : ns["label"] == "bearish" ? 'text-rose-400' : 'text-zinc-500' %>">
+        <span>📰</span><span class="uppercase tracking-wider"><%= ns["label"] %></span>
+        <span class="text-zinc-700 font-mono"><%= ns["score"] %></span>
+      </div>
+    <% end %>
+  </td>
+
+  <!-- Direction badge -->
+  <td class="px-5 py-3">
+    <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wider
+      <%= is_buy ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20' %>">
+      <span><%= is_buy ? "↑" : "↓" %></span>
+      <%= signal.signal_type %>
+    </div>
+  </td>
+
+  <!-- Score with bar -->
+  <td class="px-5 py-3">
+    <div class="flex items-center gap-2">
+      <div class="w-20 bg-zinc-900 rounded-full h-1 overflow-hidden">
+        <div class="h-full rounded-full bg-gradient-to-r <%= is_buy ? 'from-emerald-600 to-emerald-400' : 'from-rose-600 to-rose-400' %>"
+             style="width: <%= signal.score_pct %>%"></div>
+      </div>
+      <span class="text-xs font-bold font-mono <%= is_buy ? 'text-emerald-400' : 'text-rose-400' %> tabular-nums"><%= signal.score_pct %>%</span>
+    </div>
+  </td>
+
+  <!-- SL/TP if available -->
+  <td class="px-5 py-3 hidden md:table-cell">
+    <% if meta["sl_pct"] && meta["tp_pct"] %>
+      <div class="flex items-center gap-2 text-[10px] font-mono">
+        <span class="text-rose-400"><%= meta["sl_pct"] %>%</span>
+        <span class="text-zinc-700">|</span>
+        <span class="text-emerald-400">+<%= meta["tp_pct"].to_f.abs %>%</span>
+      </div>
+      <% if meta["risk_reward"] %>
+        <div class="text-[10px] text-zinc-600 mt-0.5">R:R 1:<%= meta["risk_reward"] %></div>
+      <% end %>
+    <% else %>
+      <span class="text-zinc-700 text-[10px]">—</span>
+    <% end %>
+  </td>
+
+  <!-- Time -->
+  <td class="px-5 py-3 text-right">
+    <div class="text-[11px] text-zinc-500 font-mono"><%= time_ago_in_words(signal.fired_at) %></div>
+    <div class="text-[10px] text-zinc-700 font-mono"><%= signal.fired_at.strftime("%H:%M") %></div>
+  </td>
+</tr>

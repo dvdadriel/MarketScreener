@@ -1,0 +1,175 @@
+<% accent ||= "emerald" %>
+<% accent_classes = {
+  "emerald" => { from: "from-emerald-950/30", border: "border-emerald-900/40", text: "text-emerald-400", text_alt: "text-emerald-300", glow: "glow-emerald" },
+  "orange"  => { from: "from-orange-950/30",  border: "border-orange-900/40",  text: "text-orange-400",  text_alt: "text-orange-300",  glow: "glow-amber" },
+  "sky"     => { from: "from-sky-950/30",     border: "border-sky-900/40",     text: "text-sky-400",     text_alt: "text-sky-300",     glow: "glow-sky" }
+}[accent] %>
+
+<section class="rounded-2xl bg-gradient-to-br <%= accent_classes[:from] %> to-zinc-950 border <%= accent_classes[:border] %> p-6">
+  <div class="flex items-start justify-between mb-5">
+    <div>
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-xl">📊</span>
+        <h2 class="text-base font-bold text-white">Paper Trading</h2>
+      </div>
+      <p class="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">hypothetical p&l · no real money</p>
+    </div>
+  </div>
+
+  <!-- Hero stats -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+    <div class="rounded-xl bg-zinc-950/60 border border-zinc-800 p-4">
+      <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 font-mono">Win Rate</div>
+      <div class="text-3xl font-black tabular-nums <%= stats[:win_rate] >= 50 ? 'text-emerald-400' : stats[:win_rate] > 0 ? 'text-rose-400' : 'text-zinc-600' %>">
+        <%= stats[:win_rate] %><span class="text-base font-medium text-zinc-600">%</span>
+      </div>
+      <div class="text-[10px] text-zinc-600 mt-1 font-mono">
+        <span class="text-emerald-500"><%= stats[:winners] %>W</span>
+        <span class="text-zinc-700">·</span>
+        <span class="text-rose-500"><%= stats[:losers] %>L</span>
+      </div>
+    </div>
+
+    <div class="rounded-xl bg-zinc-950/60 border border-zinc-800 p-4">
+      <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 font-mono">Avg P&L</div>
+      <div class="text-3xl font-black tabular-nums <%= stats[:avg_pnl] >= 0 ? 'text-emerald-400' : 'text-rose-400' %>">
+        <%= stats[:avg_pnl] > 0 ? "+" : "" %><%= stats[:avg_pnl] %><span class="text-base font-medium text-zinc-600">%</span>
+      </div>
+      <div class="text-[10px] text-zinc-600 mt-1 font-mono">per closed trade</div>
+    </div>
+
+    <div class="rounded-xl bg-zinc-950/60 border border-zinc-800 p-4">
+      <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 font-mono">Open</div>
+      <div class="text-3xl font-black tabular-nums text-sky-400"><%= stats[:open_count] %></div>
+      <div class="text-[10px] text-zinc-600 mt-1 font-mono">active trades</div>
+    </div>
+
+    <div class="rounded-xl bg-zinc-950/60 border border-zinc-800 p-4">
+      <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 font-mono">Closed</div>
+      <div class="text-3xl font-black tabular-nums text-zinc-300"><%= stats[:total_closed] %></div>
+      <div class="text-[10px] text-zinc-600 mt-1 font-mono">total trades</div>
+    </div>
+  </div>
+
+  <!-- Risk metrics -->
+  <div class="grid grid-cols-3 gap-3 mb-5">
+    <div class="rounded-xl bg-zinc-950/60 border border-zinc-800 p-4">
+      <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 font-mono">Profit Factor</div>
+      <% pf = stats[:profit_factor] %>
+      <div class="text-2xl font-black tabular-nums <%= pf.nil? ? 'text-zinc-600' : pf >= 1 ? 'text-emerald-400' : 'text-rose-400' %>">
+        <%= pf.nil? ? "—" : pf %>
+      </div>
+      <div class="text-[10px] text-zinc-600 mt-1 font-mono">gain ÷ loss</div>
+    </div>
+
+    <div class="rounded-xl bg-zinc-950/60 border border-zinc-800 p-4">
+      <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 font-mono">Max Drawdown</div>
+      <div class="text-2xl font-black tabular-nums <%= stats[:max_drawdown].nil? ? 'text-zinc-600' : 'text-rose-400' %>">
+        <%= stats[:max_drawdown].nil? ? "—" : "-#{stats[:max_drawdown]}" %><span class="text-sm font-medium text-zinc-600"><%= "%" unless stats[:max_drawdown].nil? %></span>
+      </div>
+      <div class="text-[10px] text-zinc-600 mt-1 font-mono">peak-to-trough</div>
+    </div>
+
+    <div class="rounded-xl bg-zinc-950/60 border border-zinc-800 p-4">
+      <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 font-mono">Sharpe</div>
+      <% sh = stats[:sharpe] %>
+      <div class="text-2xl font-black tabular-nums <%= sh.nil? ? 'text-zinc-600' : sh >= 0 ? 'text-emerald-400' : 'text-rose-400' %>">
+        <%= sh.nil? ? "—" : sh %>
+      </div>
+      <div class="text-[10px] text-zinc-600 mt-1 font-mono">per trade</div>
+    </div>
+  </div>
+
+  <!-- By strategy breakdown -->
+  <% if stats[:by_strategy].any? %>
+    <div class="rounded-xl bg-zinc-950/40 border border-zinc-900 p-4">
+      <div class="text-[10px] text-zinc-500 uppercase tracking-wider mb-3 font-mono flex items-center justify-between">
+        <span>By Strategy</span>
+        <span class="text-zinc-700">sorted by avg P&L</span>
+      </div>
+      <div class="space-y-2">
+        <% stats[:by_strategy].each do |s| %>
+          <div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-zinc-900/50 transition-colors">
+            <div class="flex items-center gap-3 flex-1 min-w-0">
+              <span class="font-mono text-xs text-zinc-300 truncate"><%= s[:strategy] %></span>
+              <span class="text-[10px] text-zinc-600 font-mono shrink-0">n=<%= s[:total] %></span>
+            </div>
+            <div class="flex items-center gap-4 shrink-0">
+              <div class="text-right">
+                <div class="text-[10px] text-zinc-600 font-mono">WR</div>
+                <div class="text-xs font-bold tabular-nums <%= s[:win_rate] >= 50 ? 'text-emerald-400' : 'text-zinc-400' %>"><%= s[:win_rate] %>%</div>
+              </div>
+              <div class="text-right w-20">
+                <div class="text-[10px] text-zinc-600 font-mono">avg</div>
+                <div class="text-xs font-bold tabular-nums <%= s[:avg_pnl] >= 0 ? 'text-emerald-400' : 'text-rose-400' %>">
+                  <%= s[:avg_pnl] > 0 ? "+" : "" %><%= s[:avg_pnl] %>%
+                </div>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </div>
+  <% else %>
+    <div class="rounded-xl bg-zinc-950/40 border border-zinc-900 p-8 text-center">
+      <div class="text-3xl mb-2 opacity-30">⏳</div>
+      <div class="text-sm text-zinc-500">No closed trades yet</div>
+      <div class="text-[10px] text-zinc-700 mt-1 font-mono uppercase tracking-wider">waiting for first closure...</div>
+    </div>
+  <% end %>
+</section>
+
+<!-- Open Trades Table -->
+<% if open_trades.any? %>
+  <section class="rounded-2xl bg-zinc-900/50 border border-zinc-800 overflow-hidden">
+    <div class="px-5 py-4 border-b border-zinc-800 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <h2 class="text-sm font-bold text-white">Open Positions</h2>
+        <span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400 font-mono uppercase tracking-wider">
+          <%= open_trades.size %> active
+        </span>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-[10px] text-zinc-500 uppercase tracking-wider border-b border-zinc-900 bg-zinc-950/50">
+            <th class="px-5 py-2.5 font-semibold">Symbol</th>
+            <th class="px-5 py-2.5 font-semibold">Side</th>
+            <th class="px-5 py-2.5 font-semibold hidden md:table-cell">Strategy</th>
+            <th class="px-5 py-2.5 font-semibold text-right">Entry</th>
+            <th class="px-5 py-2.5 font-semibold text-right">Current</th>
+            <th class="px-5 py-2.5 font-semibold text-right">P&L</th>
+            <th class="px-5 py-2.5 font-semibold text-right">Age</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-zinc-900">
+          <% open_trades.each do |t| %>
+            <% pnl = t.current_pnl_pct.to_f %>
+            <tr class="hover:bg-zinc-900/40 transition-colors">
+              <td class="px-5 py-2.5 font-mono font-semibold text-white text-xs">
+                <%= t.asset_type == 'stock' ? t.symbol.sub('.JK', '') : t.symbol.sub('USDT', '') %>
+              </td>
+              <td class="px-5 py-2.5">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold
+                  <%= t.side == 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400' %>">
+                  <%= t.side == 'BUY' ? '↑' : '↓' %>
+                  <%= t.side %>
+                </span>
+              </td>
+              <td class="px-5 py-2.5 text-[10px] font-mono text-zinc-500 hidden md:table-cell"><%= t.strategy %></td>
+              <td class="px-5 py-2.5 text-right font-mono text-zinc-400 text-xs tabular-nums"><%= t.entry_price.to_f.round(4) %></td>
+              <td class="px-5 py-2.5 text-right font-mono text-zinc-300 text-xs tabular-nums"><%= t.current_price.to_f.round(4) %></td>
+              <td class="px-5 py-2.5 text-right">
+                <span class="font-mono font-bold text-xs tabular-nums <%= pnl >= 0 ? 'text-emerald-400' : 'text-rose-400' %>">
+                  <%= pnl >= 0 ? "+" : "" %><%= pnl.round(2) %>%
+                </span>
+              </td>
+              <td class="px-5 py-2.5 text-right text-[10px] text-zinc-600 font-mono"><%= time_ago_in_words(t.entry_at) %></td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+<% end %>

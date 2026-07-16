@@ -1,0 +1,326 @@
+<%= turbo_stream_from "dashboard" %>
+
+<!-- ===== STICKY HEADER ===== -->
+<header class="sticky top-0 z-50 backdrop-blur-xl bg-zinc-950/80 border-b border-zinc-900">
+  <div class="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between">
+    <!-- Logo -->
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2.5">
+        <div class="relative">
+          <div class="h-9 w-9 rounded-xl bg-gradient-to-br from-emerald-500 to-sky-500 flex items-center justify-center text-white font-black text-lg shadow-lg shadow-emerald-500/20">
+            ⚡
+          </div>
+        </div>
+        <div>
+          <div class="text-base font-bold tracking-tight text-white">CryptoRadar</div>
+          <div class="flex items-center gap-1.5 text-[10px]">
+            <span class="pulse-dot relative flex h-1.5 w-1.5">
+              <span class="absolute inline-flex h-full w-full rounded-full bg-emerald-400"></span>
+              <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+            </span>
+            <span class="text-emerald-400 font-mono uppercase tracking-wider">live</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nav -->
+      <nav class="hidden md:flex items-center gap-1 ml-6">
+        <%= link_to analysis_path, class: "px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-lg transition-colors flex items-center gap-1.5" do %>
+          🔍 Deep Scan
+        <% end %>
+        <%= link_to idx_universe_path, class: "px-3 py-1.5 text-xs font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-lg transition-colors flex items-center gap-1.5" do %>
+          🇮🇩 IDX Universe
+        <% end %>
+      </nav>
+    </div>
+
+    <!-- Fear & Greed Badge -->
+    <% if @latest_sentiment %>
+      <div class="flex items-center gap-3">
+        <div class="hidden sm:block text-right">
+          <div class="text-[10px] text-zinc-500 uppercase tracking-wider">Fear & Greed</div>
+          <div class="text-xs text-zinc-300 font-medium"><%= @latest_sentiment.fear_greed_classification %></div>
+        </div>
+        <div class="relative h-12 w-12">
+          <svg class="w-12 h-12 transform -rotate-90">
+            <circle cx="24" cy="24" r="20" stroke="rgb(39,39,42)" stroke-width="3" fill="none" />
+            <circle cx="24" cy="24" r="20"
+              stroke="<%= case @latest_sentiment.fear_greed_value
+                          when 0..24 then 'rgb(220,38,38)'
+                          when 25..44 then 'rgb(249,115,22)'
+                          when 45..55 then 'rgb(250,204,21)'
+                          when 56..75 then 'rgb(34,197,94)'
+                          else 'rgb(16,185,129)' end %>"
+              stroke-width="3" fill="none"
+              stroke-dasharray="<%= (@latest_sentiment.fear_greed_value / 100.0 * 125.66).round(2) %> 125.66"
+              stroke-linecap="round" />
+          </svg>
+          <div class="absolute inset-0 flex items-center justify-center text-sm font-bold text-white">
+            <%= @latest_sentiment.fear_greed_value %>
+          </div>
+        </div>
+      </div>
+    <% end %>
+  </div>
+</header>
+
+<!-- ===== MAIN ===== -->
+<main class="max-w-[1600px] mx-auto px-6 py-8" data-controller="tabs" data-tabs-active-value="<%= @crypto_enabled ? "crypto" : "stock" %>">
+
+  <!-- ===== HERO TABS ===== -->
+  <div class="grid <%= @crypto_enabled ? "grid-cols-2" : "grid-cols-1" %> gap-3 mb-8">
+    <% if @crypto_enabled %>
+    <button data-action="click->tabs#select" data-tabs-target="tab" data-tab-name="crypto"
+            class="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 hover:border-orange-700/50 p-5 text-left transition-all cursor-pointer">
+      <div class="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl group-hover:bg-orange-500/10 transition-colors"></div>
+      <div class="relative">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-2xl">💰</span>
+          <span class="text-xs font-semibold text-orange-400 uppercase tracking-wider">Crypto</span>
+        </div>
+        <div class="text-2xl font-bold text-white"><%= @crypto_watchlist.size %> <span class="text-sm text-zinc-500 font-normal">coins scanned</span></div>
+        <div class="text-xs text-zinc-500 mt-1">
+          <%= @crypto_signals.count %> signals · <%= @crypto_stats[:open_count] %> open trades
+        </div>
+      </div>
+    </button>
+    <% end %>
+
+    <button data-action="click->tabs#select" data-tabs-target="tab" data-tab-name="stock"
+            class="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 hover:border-sky-700/50 p-5 text-left transition-all cursor-pointer">
+      <div class="absolute top-0 right-0 w-32 h-32 bg-sky-500/5 rounded-full blur-3xl group-hover:bg-sky-500/10 transition-colors"></div>
+      <div class="relative">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-2xl">🇮🇩</span>
+          <span class="text-xs font-semibold text-sky-400 uppercase tracking-wider">IDX Stocks</span>
+          <span class="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold <%= @idx_open ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-500' %>">
+            <%= @idx_open ? "● OPEN" : "● CLOSED" %>
+          </span>
+        </div>
+        <div class="text-2xl font-bold text-white"><%= @stock_watchlist.size %> <span class="text-sm text-zinc-500 font-normal">stocks scanned</span></div>
+        <div class="text-xs text-zinc-500 mt-1">
+          <%= @stock_signals.count %> signals · <%= @stock_stats[:open_count] %> open trades
+        </div>
+      </div>
+    </button>
+  </div>
+
+  <!-- ===== CRYPTO PANEL ===== -->
+  <% if @crypto_enabled %>
+  <div data-tabs-target="panel" data-tab-name="crypto" class="space-y-6">
+
+    <% if @latest_sentiment&.composite_score %>
+      <section class="rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 p-6">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <h2 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Composite Sentiment</h2>
+            <div class="mt-1 flex items-baseline gap-3">
+              <div class="text-4xl font-black text-white"><%= @latest_sentiment.composite_score %></div>
+              <div class="text-base font-semibold
+                <%= case @latest_sentiment.composite_score
+                    when 0..24 then 'text-red-400'
+                    when 25..44 then 'text-orange-400'
+                    when 45..55 then 'text-yellow-400'
+                    when 56..75 then 'text-emerald-400'
+                    else 'text-emerald-300' end %>">
+                <%= @latest_sentiment.sentiment_label %>
+              </div>
+            </div>
+          </div>
+          <span class="text-xs text-zinc-600">/100</span>
+        </div>
+        <div class="relative w-full bg-zinc-900 rounded-full h-2.5 overflow-hidden">
+          <div class="h-full rounded-full transition-all duration-700 bg-gradient-to-r
+            <%= case @latest_sentiment.composite_score
+                when 0..24 then 'from-red-600 to-red-400'
+                when 25..44 then 'from-orange-600 to-orange-400'
+                when 45..55 then 'from-yellow-600 to-yellow-400'
+                when 56..75 then 'from-emerald-600 to-emerald-400'
+                else 'from-emerald-500 to-teal-400' end %>"
+            style="width: <%= @latest_sentiment.composite_score %>%"></div>
+        </div>
+        <div class="flex justify-between text-[10px] text-zinc-600 mt-2 uppercase tracking-wider font-mono">
+          <span>Extreme Fear</span><span>Neutral</span><span>Extreme Greed</span>
+        </div>
+      </section>
+    <% end %>
+
+    <% if @crypto_watchlist&.any? %>
+      <section class="rounded-2xl bg-zinc-900/50 border border-zinc-800 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-orange-400">📡</span>
+            <h2 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Radar</h2>
+            <span class="text-[10px] text-zinc-600 normal-case">scanning <%= @crypto_watchlist.size %> coins</span>
+          </div>
+          <% if @scanned_at %>
+            <span class="text-[10px] text-zinc-600 font-mono">refreshed <%= time_ago_in_words(@scanned_at) %> ago</span>
+          <% end %>
+        </div>
+        <div class="flex flex-wrap gap-1">
+          <% @crypto_watchlist.each do |sym| %>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono <%= @crypto_candle_summary[sym] ? 'bg-zinc-800 text-zinc-400' : 'bg-zinc-900/60 text-zinc-700' %>">
+              <%= sym.sub("USDT", "") %>
+            </span>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
+    <% if @crypto_candle_summary.any? %>
+      <section>
+        <h2 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <span>📈 Live Prices</span>
+          <span class="text-[10px] text-zinc-700 normal-case">1h timeframe</span>
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+          <% @crypto_candle_summary.first(24).each do |symbol, candle| %>
+            <div class="card-hover rounded-xl bg-zinc-900/60 border border-zinc-800 px-3 py-2.5">
+              <div class="text-[10px] text-zinc-500 font-mono uppercase mb-0.5"><%= symbol.sub("USDT", "") %></div>
+              <div class="text-sm font-semibold text-white font-mono">$<%= number_with_delimiter(candle.close.to_f.round(candle.close.to_f >= 1 ? 2 : 6)) %></div>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
+    <%= render "dashboard/paper_stats", stats: @crypto_stats, open_trades: @crypto_open_trades, accent: "orange" %>
+    <%= render "dashboard/signals_table", signals: @crypto_signals, scope: "💰 Crypto Signals", dom_id: "crypto_signals_body" %>
+  </div>
+  <% end %>
+
+  <!-- ===== STOCK PANEL ===== -->
+  <div data-tabs-target="panel" data-tab-name="stock" class="space-y-6 hidden">
+
+    <!-- Momentum (strategi observasi, forward tracking) -->
+    <% if @momentum && @momentum[:tracked_days].positive? %>
+      <section class="rounded-2xl bg-gradient-to-br from-violet-950/30 to-zinc-950 border border-violet-900/40 p-6">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xl">🚀</span>
+            <h2 class="text-base font-bold text-white">Momentum</h2>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+              <%= @momentum[:regime_today] == "risk_on" ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300" %>">
+              <%= @momentum[:regime_today]&.tr("_", "-") || "-" %>
+            </span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-300 font-mono uppercase tracking-wider">observasi · paper</span>
+          </div>
+          <div class="text-[10px] text-zinc-500 font-mono"><%= @momentum[:inception] %> → <%= @momentum[:as_of] %> · <%= @momentum[:tracked_days] %>h</div>
+        </div>
+        <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm mb-3">
+          <% alpha = @momentum[:ihsg_return] ? (@momentum[:total_return] - @momentum[:ihsg_return]).round(2) : nil %>
+          <div>Paper: <span class="font-bold tabular-nums <%= @momentum[:total_return] >= 0 ? "text-emerald-400" : "text-rose-400" %>"><%= @momentum[:total_return] >= 0 ? "+" : "" %><%= @momentum[:total_return] %>%</span></div>
+          <div>IHSG: <span class="font-bold tabular-nums text-zinc-300"><%= @momentum[:ihsg_return] ? "#{@momentum[:ihsg_return] >= 0 ? "+" : ""}#{@momentum[:ihsg_return]}%" : "-" %></span></div>
+          <div>Alpha: <span class="font-bold tabular-nums <%= alpha && alpha >= 0 ? "text-emerald-400" : "text-rose-400" %>"><%= alpha ? "#{alpha >= 0 ? "+" : ""}#{alpha}%" : "-" %></span></div>
+          <div class="text-zinc-500 text-xs">maxDD -<%= @momentum[:max_drawdown] %>%</div>
+        </div>
+        <div class="flex flex-wrap gap-1.5">
+          <% if @momentum_picks.any? %>
+            <% @momentum_picks.each do |p| %>
+              <span class="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-xs font-mono text-zinc-300">
+                <%= p.symbol.sub(".JK", "") %> <span class="text-violet-400">+<%= (p.momentum.to_f * 100).round(1) %>%</span>
+              </span>
+            <% end %>
+          <% else %>
+            <span class="text-xs text-zinc-500 font-mono">CASH — regime risk-off, tidak pegang posisi</span>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
+    <!-- Daily Swing Picks -->
+    <% if @swing_picks.any? %>
+      <section class="rounded-2xl bg-gradient-to-br from-sky-950/30 to-zinc-950 border border-sky-900/40 p-6 glow-sky">
+        <div class="flex items-start justify-between mb-5">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-2xl">📈</span>
+              <h2 class="text-lg font-bold text-white">Today's Swing Picks</h2>
+            </div>
+            <p class="text-xs text-sky-300/70">Top <%= @swing_picks.size %> from <%= @idx_universe_size %> IDX stocks · filtered by liquidity ≥ Rp 1M/day</p>
+          </div>
+          <div class="text-right">
+            <div class="text-[10px] text-sky-400/70 uppercase tracking-wider">As of</div>
+            <div class="text-xs font-mono text-sky-300"><%= @swing_picks.first.fired_at.in_time_zone(IdxMarket::TZ).strftime("%d %b %Y") %></div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <% @swing_picks.each do |pick| %>
+            <% meta = pick.metadata || {} %>
+            <div class="card-hover rounded-xl bg-zinc-950/60 border border-sky-900/30 p-4">
+              <div class="flex items-start justify-between mb-3">
+                <div class="flex items-center gap-3">
+                  <div class="h-9 w-9 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white font-bold text-sm"><%= meta["rank"] %></div>
+                  <div>
+                    <div class="font-mono font-bold text-white text-base"><%= pick.symbol.sub(".JK", "") %></div>
+                    <div class="text-[10px] text-zinc-500">Rp <%= number_with_delimiter(meta["last_close"].to_i) %></div>
+                  </div>
+                </div>
+                <div class="px-2.5 py-1 rounded-full bg-sky-500/20 text-sky-300 text-xs font-bold">
+                  <%= pick.score_pct %>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 text-[10px] flex-wrap">
+                <span class="px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 font-mono">RSI <span class="text-white"><%= meta["rsi"] %></span></span>
+                <span class="px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 font-mono">MACD <span class="text-white"><%= meta["macd_hist"]&.round(2) %><%= meta["macd_rising"] ? " ↑" : "" %></span></span>
+                <span class="px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-400 font-mono">Vol <span class="text-white"><%= meta["volume_ratio"] %>x</span></span>
+                <span class="px-1.5 py-0.5 rounded <%= meta["price_vs_ma50"].to_f >= 0 ? 'bg-emerald-950 text-emerald-300' : 'bg-rose-950 text-rose-300' %> font-mono">
+                  MA50 <%= meta["price_vs_ma50"].to_f >= 0 ? "+" : "" %><%= meta["price_vs_ma50"] %>%
+                </span>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
+    <% if @stock_watchlist&.any? %>
+      <section class="rounded-2xl bg-zinc-900/50 border border-zinc-800 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-sky-400">🇮🇩</span>
+            <h2 class="text-xs font-semibold text-zinc-400 uppercase tracking-wider">IDX Radar</h2>
+            <span class="text-[10px] text-zinc-600 normal-case">scanning <%= @stock_watchlist.size %> stocks</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <%= link_to "⚙ manage", idx_universe_path, class: "text-[10px] text-sky-400 hover:text-sky-300 font-medium" %>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full <%= @idx_open ? 'bg-emerald-500/20 text-emerald-300' : 'bg-zinc-800 text-zinc-500' %>">
+              <%= @idx_open ? "MARKET OPEN" : "MARKET CLOSED" %>
+            </span>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-1">
+          <% @stock_watchlist.each do |sym| %>
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-mono <%= @stock_candle_summary[sym] ? 'bg-zinc-800 text-zinc-400' : 'bg-zinc-900/60 text-zinc-700' %>">
+              <%= sym.sub(".JK", "") %>
+            </span>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
+    <% if @stock_candle_summary.any? %>
+      <section>
+        <h2 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <span>📊 Latest Closes</span>
+          <span class="text-[10px] text-zinc-700 normal-case">daily timeframe</span>
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+          <% @stock_candle_summary.first(24).each do |symbol, candle| %>
+            <div class="card-hover rounded-xl bg-zinc-900/60 border border-zinc-800 px-3 py-2.5">
+              <div class="text-[10px] text-zinc-500 font-mono uppercase mb-0.5"><%= symbol.sub(".JK", "") %></div>
+              <div class="text-sm font-semibold text-white font-mono">Rp <%= number_with_delimiter(candle.close.to_f.round) %></div>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
+    <%= render "dashboard/paper_stats", stats: @stock_stats, open_trades: @stock_open_trades, accent: "sky" %>
+    <%= render "dashboard/signals_table", signals: @stock_signals, scope: "🇮🇩 IDX Signals", dom_id: "stock_signals_body" %>
+  </div>
+</main>
+
+<footer class="max-w-[1600px] mx-auto px-6 py-8 text-center text-[10px] text-zinc-700 font-mono uppercase tracking-wider">
+  cryptoradar · paper trading mode · no financial advice
+</footer>

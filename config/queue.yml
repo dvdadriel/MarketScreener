@@ -1,0 +1,25 @@
+default: &default
+  dispatchers:
+    - polling_interval: 1
+      batch_size: 500
+  workers:
+    # Dedicated pool for time-sensitive work (price polling, signal eval, alerts)
+    # so a long IDX scan can never delay the 1-minute crypto poller.
+    - queues: [ realtime ]
+      threads: 3
+      processes: <%= ENV.fetch("REALTIME_CONCURRENCY", 1) %>
+      polling_interval: 0.1
+    # Everything else: default housekeeping first, heavy scans last.
+    - queues: [ default, scan ]
+      threads: 2
+      processes: <%= ENV.fetch("JOB_CONCURRENCY", 1) %>
+      polling_interval: 0.5
+
+development:
+  <<: *default
+
+test:
+  <<: *default
+
+production:
+  <<: *default

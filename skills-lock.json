@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "ruflo": {
+      "source": "ruvnet/ruflo",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "d5a088ef49cc458f5b5b294eada46773a28c481d4ad7444a8b2801beca1428c2"
+    }
+  }
+}

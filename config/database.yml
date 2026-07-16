@@ -1,0 +1,31 @@
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+
+development:
+  <<: *default
+  database: crypto_screener_development
+
+test:
+  <<: *default
+  database: crypto_screener_test
+
+# Multi-database: Solid Cache/Queue/Cable pakai koneksi terpisah (lihat
+# cache.yml/queue.yml/cable.yml + production.rb solid_queue.connects_to).
+# Skema tiap DB dimuat dari db/{cache,queue,cable}_schema.rb saat db:prepare.
+production:
+  primary: &primary_production
+    <<: *default
+    database: crypto_screener_production
+    username: crypto_screener
+    password: <%= ENV["CRYPTO_SCREENER_DATABASE_PASSWORD"] %>
+  cache:
+    <<: *primary_production
+    database: crypto_screener_production_cache
+  queue:
+    <<: *primary_production
+    database: crypto_screener_production_queue
+  cable:
+    <<: *primary_production
+    database: crypto_screener_production_cable

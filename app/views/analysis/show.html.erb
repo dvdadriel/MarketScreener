@@ -1,0 +1,276 @@
+<div class="max-w-6xl mx-auto px-6 py-8 space-y-6">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-fuchsia-500 to-pink-700 flex items-center justify-center text-xl">🔍</div>
+      <div>
+        <h1 class="text-xl font-bold text-white">Deep Analysis</h1>
+        <p class="text-xs text-zinc-500">Multi-timeframe scan untuk satu saham/coin</p>
+      </div>
+    </div>
+    <%= link_to root_path, class: "text-xs text-zinc-500 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-zinc-900 transition-colors" do %>
+      ← Back to Dashboard
+    <% end %>
+  </div>
+
+  <!-- Search -->
+  <section class="rounded-2xl bg-zinc-900/50 border border-zinc-800 p-5">
+    <%= form_with url: analysis_path, method: :get, local: true, class: "flex gap-2" do |f| %>
+      <%= f.text_field :symbol, value: @symbol, placeholder: "BBCA · BTCUSDT · SOL · TLKM.JK",
+            autofocus: true,
+            class: "flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-4 py-2.5 text-sm font-mono text-white placeholder:text-zinc-700 focus:outline-none focus:border-fuchsia-700 transition-colors" %>
+      <%= f.submit "Analyze", class: "px-6 py-2.5 bg-gradient-to-r from-fuchsia-600 to-pink-600 hover:from-fuchsia-500 hover:to-pink-500 text-white text-sm font-bold rounded-lg cursor-pointer transition-all" %>
+    <% end %>
+    <p class="text-[10px] text-zinc-600 mt-2 font-mono">
+      Format auto-detected · <span class="text-zinc-400">BBCA</span> → IDX · <span class="text-zinc-400">BTC</span> → crypto
+    </p>
+  </section>
+
+  <% if @result.nil? %>
+    <div class="rounded-2xl bg-zinc-900/30 border border-zinc-900 p-12 text-center">
+      <div class="text-4xl mb-3 opacity-30">🔍</div>
+      <div class="text-sm text-zinc-500">Enter symbol untuk analyze</div>
+    </div>
+  <% elsif @result[:error] %>
+    <div class="rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 p-4 text-sm flex items-center gap-2">
+      <span>⚠</span><%= @result[:error] %>
+    </div>
+  <% else %>
+
+    <!-- VERDICT CARD -->
+    <% rec = @result[:recommendation] %>
+    <% verdict_classes = case rec[:verdict]
+       when "BUY"           then { bg: "from-emerald-950/40 to-zinc-950", border: "border-emerald-700/40", badge: "bg-emerald-500", glow: "glow-emerald" }
+       when "SELL"          then { bg: "from-rose-950/40 to-zinc-950",    border: "border-rose-700/40",    badge: "bg-rose-500",    glow: "glow-rose" }
+       when /WATCH-BUY/     then { bg: "from-emerald-950/20 to-zinc-950", border: "border-emerald-800/30", badge: "bg-emerald-700", glow: "" }
+       when /WATCH-SELL/    then { bg: "from-rose-950/20 to-zinc-950",    border: "border-rose-800/30",    badge: "bg-rose-700",    glow: "" }
+       else                      { bg: "from-zinc-900 to-zinc-950",        border: "border-zinc-800",       badge: "bg-zinc-700",    glow: "" }
+       end %>
+    <section class="rounded-2xl bg-gradient-to-br <%= verdict_classes[:bg] %> border <%= verdict_classes[:border] %> p-6 <%= verdict_classes[:glow] %>">
+      <div class="flex items-start justify-between mb-5">
+        <div>
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-3xl font-black font-mono text-white tracking-tight"><%= @result[:display] %></span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider <%= @result[:asset_type] == 'stock' ? 'bg-sky-500/20 text-sky-300' : 'bg-orange-500/20 text-orange-300' %>">
+              <%= @result[:asset_type] %>
+            </span>
+          </div>
+          <div class="text-[10px] text-zinc-600 font-mono">analyzed <%= time_ago_in_words(@result[:analyzed_at]) %> ago</div>
+        </div>
+        <div class="text-right">
+          <div class="<%= verdict_classes[:badge] %> text-white px-5 py-2.5 rounded-xl text-xl font-black tracking-wider shadow-lg">
+            <%= rec[:verdict] %>
+          </div>
+          <div class="text-[10px] text-zinc-500 mt-1.5 font-mono uppercase tracking-wider">
+            <%= rec[:confidence] %><% if rec[:score] %> · <%= rec[:score] %>%<% end %>
+          </div>
+        </div>
+      </div>
+      <div class="text-sm text-zinc-300"><%= rec[:reason] %></div>
+
+      <% if rec[:entry] %>
+        <div class="mt-5 grid grid-cols-3 gap-3">
+          <div class="rounded-xl bg-zinc-950/80 border border-zinc-800 p-4">
+            <div class="text-[10px] text-zinc-500 uppercase tracking-wider font-mono mb-1.5">Entry</div>
+            <div class="text-base font-bold font-mono text-white tabular-nums">
+              <%= @result[:asset_type] == 'stock' ? "Rp #{number_with_delimiter(rec[:entry].to_i)}" : "$#{rec[:entry].to_f.round(4)}" %>
+            </div>
+          </div>
+          <div class="rounded-xl bg-rose-950/30 border border-rose-900/40 p-4">
+            <div class="text-[10px] text-rose-400 uppercase tracking-wider font-mono mb-1.5">Stop Loss · <%= rec[:sl_pct] %>%</div>
+            <div class="text-base font-bold font-mono text-rose-300 tabular-nums">
+              <%= @result[:asset_type] == 'stock' ? "Rp #{number_with_delimiter(rec[:sl].to_i)}" : "$#{rec[:sl].to_f.round(4)}" %>
+            </div>
+          </div>
+          <div class="rounded-xl bg-emerald-950/30 border border-emerald-900/40 p-4">
+            <div class="text-[10px] text-emerald-400 uppercase tracking-wider font-mono mb-1.5">Take Profit · +<%= rec[:tp_pct].to_f.abs %>%</div>
+            <div class="text-base font-bold font-mono text-emerald-300 tabular-nums">
+              <%= @result[:asset_type] == 'stock' ? "Rp #{number_with_delimiter(rec[:tp].to_i)}" : "$#{rec[:tp].to_f.round(4)}" %>
+            </div>
+          </div>
+        </div>
+        <div class="text-[10px] text-zinc-600 mt-3 font-mono">Risk:Reward = 1:<%= rec[:risk_reward] %></div>
+      <% end %>
+    </section>
+
+    <!-- AI NARRATIVE (NVIDIA NIM) -->
+    <% if @result[:narrative].present? %>
+      <section class="rounded-2xl bg-gradient-to-br from-violet-950/30 to-zinc-950 border border-violet-800/30 p-5">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-lg">🤖</span>
+          <h2 class="text-xs font-semibold text-violet-300 uppercase tracking-wider font-mono">AI Analysis</h2>
+        </div>
+        <p class="text-sm text-zinc-300 leading-relaxed"><%= @result[:narrative] %></p>
+      </section>
+    <% end %>
+
+    <!-- TIMEFRAME GRID -->
+    <section>
+      <h2 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3 font-mono">Multi-Timeframe Analysis</h2>
+      <div class="space-y-3">
+        <% @result[:timeframes].each do |tf, data| %>
+          <% next unless data[:has_data] %>
+          <% trend_classes = case data[:trend_bias]
+             when :bullish then { bg: "bg-emerald-500/10", border: "border-emerald-500/20", text: "text-emerald-400" }
+             when :bearish then { bg: "bg-rose-500/10",    border: "border-rose-500/20",    text: "text-rose-400" }
+             else { bg: "bg-zinc-800/40", border: "border-zinc-800", text: "text-zinc-500" } end %>
+          <div class="card-hover rounded-xl bg-zinc-900/50 border border-zinc-800 p-5">
+            <!-- TF header -->
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-zinc-800">
+              <div class="flex items-center gap-3">
+                <span class="px-2.5 py-1 rounded bg-zinc-800 text-zinc-200 text-xs font-mono font-bold tracking-wider"><%= tf.upcase %></span>
+                <span class="text-[10px] text-zinc-600 font-mono"><%= data[:candle_count] %> candles</span>
+                <span class="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider <%= trend_classes[:bg] %> <%= trend_classes[:text] %> border <%= trend_classes[:border] %>">
+                  <%= data[:trend_bias] %>
+                </span>
+              </div>
+              <div class="text-right">
+                <div class="text-sm font-mono font-bold text-white tabular-nums">
+                  <%= @result[:asset_type] == 'stock' ? "Rp #{number_with_delimiter(data[:last_close].to_i)}" : data[:last_close].round(6) %>
+                </div>
+                <div class="text-[10px] font-mono <%= data[:price_change] >= 0 ? 'text-emerald-400' : 'text-rose-400' %>">
+                  <%= data[:price_change] >= 0 ? "+" : "" %><%= data[:price_change] %>%
+                </div>
+              </div>
+            </div>
+
+            <!-- Indicators grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 text-[11px]">
+              <!-- RSI -->
+              <div class="rounded-lg bg-zinc-950/60 border border-zinc-900 p-2.5">
+                <div class="text-[9px] text-zinc-600 uppercase tracking-wider font-mono mb-1">RSI</div>
+                <div class="text-base font-black font-mono tabular-nums <%= data[:rsi].to_f < 30 ? 'text-emerald-400' : data[:rsi].to_f > 70 ? 'text-rose-400' : 'text-zinc-300' %>">
+                  <%= data[:rsi] %>
+                </div>
+                <% if data[:rsi_signal] %>
+                  <div class="text-[9px] text-zinc-600 mt-0.5"><%= data[:rsi_signal][:reason] %></div>
+                <% end %>
+              </div>
+
+              <!-- MACD -->
+              <div class="rounded-lg bg-zinc-950/60 border border-zinc-900 p-2.5">
+                <div class="text-[9px] text-zinc-600 uppercase tracking-wider font-mono mb-1">MACD</div>
+                <div class="text-base font-black font-mono tabular-nums <%= data[:macd_hist].to_f > 0 ? 'text-emerald-400' : 'text-rose-400' %>">
+                  <%= data[:macd_hist] %><%= data[:macd_rising] ? "↑" : "↓" %>
+                </div>
+                <% if data[:macd_signal] %>
+                  <div class="text-[9px] text-zinc-600 mt-0.5"><%= data[:macd_signal][:reason] %></div>
+                <% end %>
+              </div>
+
+              <!-- Bollinger -->
+              <div class="rounded-lg bg-zinc-950/60 border border-zinc-900 p-2.5">
+                <div class="text-[9px] text-zinc-600 uppercase tracking-wider font-mono mb-1">BB Pos</div>
+                <div class="text-sm font-bold text-zinc-200 capitalize"><%= data[:bb_position] %></div>
+              </div>
+
+              <!-- Volume -->
+              <div class="rounded-lg bg-zinc-950/60 border border-zinc-900 p-2.5">
+                <div class="text-[9px] text-zinc-600 uppercase tracking-wider font-mono mb-1">Volume</div>
+                <div class="text-base font-black font-mono tabular-nums <%= data[:volume_ratio].to_f >= 2 ? 'text-amber-400' : 'text-zinc-300' %>">
+                  <%= data[:volume_ratio] %>x
+                </div>
+                <div class="text-[9px] text-zinc-600 mt-0.5">vs 20-period</div>
+              </div>
+
+              <!-- EMA50 -->
+              <% if data[:ema50] %>
+                <div class="rounded-lg bg-zinc-950/60 border border-zinc-900 p-2.5">
+                  <div class="text-[9px] text-zinc-600 uppercase tracking-wider font-mono mb-1">vs EMA50</div>
+                  <div class="text-base font-black font-mono tabular-nums <%= data[:vs_ema50_pct].to_f > 0 ? 'text-emerald-400' : 'text-rose-400' %>">
+                    <%= data[:vs_ema50_pct] >= 0 ? "+" : "" %><%= data[:vs_ema50_pct] %>%
+                  </div>
+                </div>
+              <% end %>
+
+              <!-- EMA200 -->
+              <% if data[:ema200] %>
+                <div class="rounded-lg bg-zinc-950/60 border border-zinc-900 p-2.5">
+                  <div class="text-[9px] text-zinc-600 uppercase tracking-wider font-mono mb-1">vs EMA200</div>
+                  <div class="text-base font-black font-mono tabular-nums <%= data[:vs_ema200_pct].to_f > 0 ? 'text-emerald-400' : 'text-rose-400' %>">
+                    <%= data[:vs_ema200_pct] >= 0 ? "+" : "" %><%= data[:vs_ema200_pct] %>%
+                  </div>
+                </div>
+              <% end %>
+
+              <!-- ATR -->
+              <div class="rounded-lg bg-zinc-950/60 border border-zinc-900 p-2.5">
+                <div class="text-[9px] text-zinc-600 uppercase tracking-wider font-mono mb-1">ATR Vol</div>
+                <div class="text-base font-black font-mono tabular-nums text-sky-400">
+                  <%= data[:atr_pct] %>%
+                </div>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+    </section>
+
+    <!-- Recent Signals -->
+    <% if @result[:recent_signals].any? %>
+      <section class="rounded-2xl bg-zinc-900/50 border border-zinc-800 p-5">
+        <h2 class="text-sm font-bold text-white mb-3">Recent Signals</h2>
+        <div class="space-y-1.5">
+          <% @result[:recent_signals].each do |s| %>
+            <div class="flex items-center justify-between bg-zinc-950/60 rounded-lg px-3 py-2 text-xs">
+              <div class="flex items-center gap-3">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold
+                  <%= s.signal_type == 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400' %>">
+                  <%= s.signal_type == 'BUY' ? '↑' : '↓' %><%= s.signal_type %>
+                </span>
+                <span class="font-mono text-zinc-400"><%= s.strategy %></span>
+                <% if (ns = s.metadata&.dig("news_sentiment")) %>
+                  <span class="text-[10px] <%= ns["label"] == "bullish" ? "text-emerald-400" : ns["label"] == "bearish" ? "text-rose-400" : "text-zinc-500" %>">📰 <%= ns["label"] %></span>
+                <% end %>
+              </div>
+              <div class="flex items-center gap-3 text-[10px] text-zinc-600">
+                <span class="font-mono tabular-nums"><%= s.score_pct %>%</span>
+                <span class="font-mono"><%= time_ago_in_words(s.fired_at) %></span>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
+    <!-- Paper Trade History -->
+    <% pt = @result[:paper_trades] %>
+    <% if pt[:closed].any? || pt[:open].any? %>
+      <section class="rounded-2xl bg-zinc-900/50 border border-zinc-800 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-bold text-white">Paper Trade History</h2>
+          <% if pt[:win_rate] %>
+            <div class="text-[11px] text-zinc-500 flex items-center gap-3">
+              <span>WR <span class="<%= pt[:win_rate] >= 50 ? 'text-emerald-400' : 'text-rose-400' %> font-bold font-mono"><%= pt[:win_rate] %>%</span></span>
+              <span class="text-zinc-700">·</span>
+              <span>Avg <span class="<%= pt[:avg_pnl].to_f >= 0 ? 'text-emerald-400' : 'text-rose-400' %> font-bold font-mono"><%= pt[:avg_pnl] %>%</span></span>
+            </div>
+          <% end %>
+        </div>
+        <div class="space-y-1.5">
+          <% (pt[:open].to_a + pt[:closed].to_a).first(10).each do |t| %>
+            <% pnl = (t.closed? ? t.pnl_pct : t.current_pnl_pct).to_f %>
+            <div class="flex items-center justify-between bg-zinc-950/60 rounded-lg px-3 py-2 text-xs">
+              <div class="flex items-center gap-3">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold
+                  <%= t.side == 'BUY' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400' %>">
+                  <%= t.side %>
+                </span>
+                <span class="font-mono text-zinc-400"><%= t.strategy %></span>
+                <span class="text-[10px] text-zinc-600 uppercase"><%= t.status %></span>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="font-mono font-bold text-xs tabular-nums <%= pnl >= 0 ? 'text-emerald-400' : 'text-rose-400' %>">
+                  <%= pnl >= 0 ? "+" : "" %><%= pnl.round(2) %>%
+                </span>
+                <span class="text-[10px] text-zinc-600 font-mono"><%= time_ago_in_words(t.entry_at) %></span>
+              </div>
+            </div>
+          <% end %>
+        </div>
+      </section>
+    <% end %>
+
+  <% end %>
+</div>

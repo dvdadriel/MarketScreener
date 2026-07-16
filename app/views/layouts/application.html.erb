@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-zinc-950">
+<head>
+  <title><%= content_for(:title) || "CryptoRadar — Signal Scanner" %></title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="application-name" content="CryptoRadar">
+  <meta name="mobile-web-app-capable" content="yes">
+  <%= csrf_meta_tags %>
+  <%= csp_meta_tag %>
+
+  <%= yield :head %>
+
+  <link rel="icon" href="/icon.png" type="image/png">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
+  <%= javascript_importmap_tags %>
+
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .font-mono, code, pre { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+    .bg-grid {
+      background-image:
+        linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    .glow-emerald { box-shadow: 0 0 24px -8px rgba(16,185,129,0.4); }
+    .glow-rose    { box-shadow: 0 0 24px -8px rgba(244,63,94,0.4); }
+    .glow-sky     { box-shadow: 0 0 24px -8px rgba(14,165,233,0.3); }
+    .glow-amber   { box-shadow: 0 0 24px -8px rgba(245,158,11,0.3); }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #09090b; }
+    ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+    .card-hover { transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease; }
+    .card-hover:hover { transform: translateY(-1px); border-color: rgba(255,255,255,0.1); }
+
+    .pulse-dot {
+      position: relative;
+    }
+    .pulse-dot::before {
+      content: ''; position: absolute; inset: 0;
+      border-radius: 9999px;
+      animation: pulse-ring 2s cubic-bezier(0.455, 0.030, 0.515, 0.955) infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.8); opacity: 0.8; }
+      80%, 100% { transform: scale(2.2); opacity: 0; }
+    }
+  </style>
+</head>
+<body class="h-full text-zinc-100 antialiased bg-grid">
+  <div class="min-h-full">
+    <%= yield %>
+  </div>
+</body>
+</html>

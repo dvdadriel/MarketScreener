@@ -1,0 +1,125 @@
+<div class="max-w-5xl mx-auto px-6 py-8 space-y-6">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-sky-500 to-blue-700 flex items-center justify-center text-xl">🇮🇩</div>
+      <div>
+        <h1 class="text-xl font-bold text-white">IDX Universe Manager</h1>
+        <p class="text-xs text-zinc-500">Customize daftar saham yang di-scan untuk swing picks</p>
+      </div>
+    </div>
+    <%= link_to root_path, class: "text-xs text-zinc-500 hover:text-white flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-zinc-900 transition-colors" do %>
+      ← Back to Dashboard
+    <% end %>
+  </div>
+
+  <!-- Flash -->
+  <% if notice %>
+    <div class="rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 px-4 py-3 text-sm flex items-center gap-2">
+      <span>✓</span><%= notice %>
+    </div>
+  <% end %>
+  <% if alert %>
+    <div class="rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 px-4 py-3 text-sm flex items-center gap-2">
+      <span>⚠</span><%= alert %>
+    </div>
+  <% end %>
+
+  <!-- Current Source Card -->
+  <section class="rounded-2xl bg-gradient-to-br from-zinc-900 to-zinc-950 border border-zinc-800 p-6">
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="text-[10px] text-zinc-500 uppercase tracking-wider font-mono mb-2">Active Source</div>
+        <div class="flex items-center gap-3">
+          <% case @source %>
+          <% when :custom %>
+            <span class="px-3 py-1 rounded-lg text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">● CUSTOM UPLOADED</span>
+          <% when :idx_api %>
+            <span class="px-3 py-1 rounded-lg text-xs font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">● IDX OFFICIAL API</span>
+          <% when :hardcoded %>
+            <span class="px-3 py-1 rounded-lg text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">● HARDCODED FALLBACK</span>
+          <% else %>
+            <span class="px-3 py-1 rounded-lg text-xs font-bold bg-zinc-800 text-zinc-500">UNKNOWN</span>
+          <% end %>
+          <% if @uploaded_at %>
+            <span class="text-[10px] text-zinc-600 font-mono">uploaded <%= time_ago_in_words(@uploaded_at) %> ago</span>
+          <% end %>
+        </div>
+        <div class="mt-3 flex items-baseline gap-2">
+          <span class="text-4xl font-black text-white tabular-nums"><%= @tickers.size %></span>
+          <span class="text-sm text-zinc-500">tickers in rotation</span>
+        </div>
+      </div>
+      <div class="flex flex-col gap-2">
+        <%= link_to download_idx_universe_path, class: "px-3 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs rounded-lg font-semibold flex items-center gap-2 transition-colors" do %>
+          ⬇ Download
+        <% end %>
+        <% if @source == :custom %>
+          <%= button_to idx_universe_path, method: :delete,
+                form: { data: { turbo_confirm: "Hapus custom list? Revert ke IDX API." } },
+                class: "px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 text-xs rounded-lg font-semibold flex items-center gap-2 transition-colors" do %>
+            ✕ Clear custom
+          <% end %>
+        <% end %>
+      </div>
+    </div>
+  </section>
+
+  <!-- Upload Form -->
+  <section class="rounded-2xl bg-zinc-900/50 border border-zinc-800 p-6">
+    <div class="flex items-center gap-2 mb-4">
+      <span class="text-emerald-400">⬆</span>
+      <h2 class="text-sm font-bold text-white">Upload Custom List</h2>
+    </div>
+
+    <%= form_with url: idx_universe_path, method: :post, multipart: true, local: true, class: "space-y-4" do |f| %>
+      <div>
+        <label class="block text-[10px] text-zinc-500 uppercase tracking-wider font-mono mb-2">Option 1 — Upload file</label>
+        <%= f.file_field :file, accept: ".txt,.csv,.list",
+              class: "block w-full text-sm text-zinc-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border file:border-zinc-700 file:bg-zinc-800 file:text-zinc-200 file:text-xs file:font-semibold file:cursor-pointer hover:file:bg-zinc-700" %>
+      </div>
+
+      <div class="relative">
+        <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-zinc-800"></div></div>
+        <div class="relative flex justify-center"><span class="bg-zinc-900/50 px-3 text-[10px] text-zinc-600 font-mono uppercase tracking-wider">or</span></div>
+      </div>
+
+      <div>
+        <label class="block text-[10px] text-zinc-500 uppercase tracking-wider font-mono mb-2">Option 2 — Paste tickers</label>
+        <%= f.text_area :tickers, rows: 6,
+              placeholder: "BBCA\nBBRI\nTLKM\nASII\n\n— or —\n\nBBCA, BBRI, TLKM, ASII",
+              class: "w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm font-mono text-zinc-300 focus:outline-none focus:border-emerald-700 transition-colors" %>
+        <p class="text-[10px] text-zinc-600 mt-1.5 font-mono">.JK suffix added automatically</p>
+      </div>
+
+      <%= f.submit "Upload & Activate", class: "px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-sm font-bold rounded-lg cursor-pointer transition-all" %>
+    <% end %>
+  </section>
+
+  <!-- Tickers Preview -->
+  <section class="rounded-2xl bg-zinc-900/50 border border-zinc-800 p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-bold text-white">Currently Active</h2>
+      <span class="text-[10px] text-zinc-600 font-mono uppercase tracking-wider">showing first 100 of <%= @tickers.size %></span>
+    </div>
+    <div class="flex flex-wrap gap-1">
+      <% @tickers.first(100).each do |t| %>
+        <span class="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] font-mono"><%= t.sub(".JK", "") %></span>
+      <% end %>
+      <% if @tickers.size > 100 %>
+        <span class="px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-600 text-[10px] font-mono">+<%= @tickers.size - 100 %> more</span>
+      <% end %>
+    </div>
+  </section>
+
+  <!-- Help -->
+  <section class="rounded-xl bg-zinc-950 border border-zinc-900 p-4 text-[11px] text-zinc-500 space-y-1.5">
+    <div class="text-zinc-400 font-semibold mb-2 flex items-center gap-2">📖 How it works</div>
+    <p>• Custom list <span class="text-zinc-300">aktif segera</span> setelah upload. Scanner berikutnya pakai list baru.</p>
+    <p>• Format: satu ticker per baris, koma, atau spasi. <span class="text-zinc-300">.JK auto-appended</span>.</p>
+    <p>• <span class="text-zinc-300">Clear custom</span> → kembali ke IDX API otomatis (~900 stocks).</p>
+    <p>• Disimpan di <code class="text-zinc-300">storage/idx_universe.txt</code>, persistent across restarts.</p>
+  </section>
+
+</div>

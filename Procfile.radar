@@ -1,0 +1,2 @@
+web: bin/rails server -p 4242 -b ${RADAR_BIND:-127.0.0.1}
+jobs: bin/jobs
