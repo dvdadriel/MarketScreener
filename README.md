@@ -39,14 +39,4 @@ bin/rails "momentum:rank[extended]"                 # peringkat momentum hari in
 bin/rails momentum:paper                            # status forward tracking vs IHSG
 ```
 
-## Dokumentasi
-
-| File | Isi |
-|------|-----|
-| [`guideline/soul.md`](guideline/soul.md) | Prinsip pengambilan keputusan (jiwa trader) |
-| [`guideline/logic.md`](guideline/logic.md) | Logika strategi/gate/backtest terkini |
-| [`guideline/feature.md`](guideline/feature.md) | Peta fitur |
-| [`guideline/improvement_plan.md`](guideline/improvement_plan.md) | Roadmap eksekusi + status |
-| [`guideline/docs/`](guideline/docs/) | Laporan & spec (termasuk laporan strategi momentum) |
-
 Paper trading only — bukan nasihat finansial.
