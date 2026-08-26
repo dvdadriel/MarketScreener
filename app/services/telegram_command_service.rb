@@ -65,6 +65,24 @@ class TelegramCommandService
     reply(chat_id, dispatch(text))
   end
 
+  # Bangun teks /rank tanpa lewat parsing perintah (dipakai RankReportJob terjadwal).
+  def rank_message(universe = "extended")
+    cmd_rank(universe)
+  end
+
+  # Satu format daftar ranking untuk /rank manual maupun RankReportJob — jangan
+  # duplikasi teksnya di dua tempat.
+  def self.format_rank(picks, blocked)
+    header = if blocked
+      "🛑 *Regime RISK-OFF → CASH* — watchlist, JANGAN beli dulu\n_#{IdxMarketState.reason}_"
+    else
+      "📈 *Top #{picks.size} Momentum* (regime risk-on)"
+    end
+    lines = [ header ]
+    picks.each_with_index { |p, i| lines << "#{i + 1}. *#{p[:symbol].sub('.JK', '')}* #{format('%+.1f%%', p[:momentum] * 100)} · Rp #{p[:last_close].to_i}" }
+    lines.join("\n")
+  end
+
   private
 
   # Allowlist eksplisit — satu-satunya jalur dari teks Telegram ke kode.
@@ -89,15 +107,13 @@ class TelegramCommandService
     universe = UNIVERSES[arg.to_s.strip.presence || "lq45"]
     return "Universe: lq45 | extended | all" unless universe
 
-    if IdxMarketState.long_blocked?
-      return "🛑 Regime IHSG RISK-OFF → CASH.\n_#{IdxMarketState.reason}_"
-    end
-    picks = MomentumRankingService.new(symbols: universe.call).call
+    blocked = IdxMarketState.long_blocked?
+    # Risk-off: tetap tampilkan ranking sebagai WATCHLIST (bukan sinyal beli) —
+    # ignore_regime hanya untuk lihat, aksi nyata (snapshot/paper) tetap ter-gate.
+    picks = MomentumRankingService.new(symbols: universe.call, ignore_regime: blocked).call
     return "Tidak ada pick (data kurang)." if picks.empty?
 
-    lines = [ "📈 *Top #{picks.size} Momentum* (regime risk-on)" ]
-    picks.each_with_index { |p, i| lines << "#{i + 1}. *#{p[:symbol].sub('.JK', '')}* #{format('%+.1f%%', p[:momentum] * 100)} · Rp #{p[:last_close].to_i}" }
-    lines.join("\n")
+    self.class.format_rank(picks, blocked)
   end
 
   def cmd_health

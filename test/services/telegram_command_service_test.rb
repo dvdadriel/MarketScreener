@@ -79,6 +79,30 @@ class TelegramCommandServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "/rank shows watchlist during risk-off (ignore_regime), labeled not-a-buy" do
+    orig_blocked = IdxMarketState.method(:long_blocked?)
+    orig_reason  = IdxMarketState.method(:reason)
+    orig_call    = MomentumRankingService.instance_method(:call)
+    IdxMarketState.define_singleton_method(:long_blocked?) { true }
+    IdxMarketState.define_singleton_method(:reason) { "IHSG risk-off" }
+    MomentumRankingService.define_method(:call) do
+      raise "ignore_regime must be set during risk-off" unless @ignore_regime
+      [ { symbol: "BDMN.JK", momentum: 0.647, last_close: 4240 } ]
+    end
+    with_env do
+      capture_replies do |sent|
+        TelegramCommandService.new.process(update(chat_id: ADMIN, text: "/rank extended"))
+        assert_match(/RISK-OFF/, sent.first)
+        assert_match(/JANGAN beli/, sent.first)
+        assert_match(/BDMN/, sent.first)
+      end
+    end
+  ensure
+    IdxMarketState.define_singleton_method(:long_blocked?, orig_blocked)
+    IdxMarketState.define_singleton_method(:reason, orig_reason)
+    MomentumRankingService.define_method(:call, orig_call)
+  end
+
   test "/status replies with tracker summary" do
     MomentumSnapshot.create!(snapshot_date: Date.current, regime: "risk_off")
     with_env do

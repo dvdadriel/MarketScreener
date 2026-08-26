@@ -5,17 +5,19 @@ namespace :momentum do
     "all"      => -> { IdxUniverseService.all }
   }.freeze
 
-  desc "Peringkat momentum HARI INI (top-N) + status regime. Contoh: bin/rails 'momentum:rank[extended]'"
-  task :rank, [ :universe, :top_n ] => :environment do |_t, args|
+  desc "Peringkat momentum HARI INI (top-N) + status regime. watch=1 → tetap tampilkan ranking walau risk-off (watchlist, BUKAN sinyal beli). Contoh: bin/rails 'momentum:rank[extended,10,1]'"
+  task :rank, [ :universe, :top_n, :watch ] => :environment do |_t, args|
     syms  = (UNIVERSES[args[:universe]] || UNIVERSES["lq45"]).call
     top_n = (args[:top_n] || 10).to_i
+    watch = args[:watch].to_s == "1"
 
     blocked = IdxMarketState.long_blocked?
     puts "Regime IHSG: #{blocked ? 'RISK-OFF → CASH (tak ada posisi)' : 'RISK-ON'} (#{IdxMarketState.reason})"
-    picks = MomentumRankingService.new(symbols: syms, top_n: top_n).call
+    picks = MomentumRankingService.new(symbols: syms, top_n: top_n, ignore_regime: watch).call
     if picks.empty?
       puts "(tidak ada pick — regime risk-off atau data kurang)"
     else
+      puts "⚠️  WATCHLIST informasional — regime risk-off, JANGAN beli dulu:" if blocked && watch
       puts "Top #{picks.size} momentum (dari #{syms.size} simbol):"
       picks.each_with_index { |p, i| printf("%2d. %-10s mom=%+.1f%%  Rp %d\n", i + 1, p[:symbol].sub('.JK', ''), p[:momentum] * 100, p[:last_close]) }
     end
