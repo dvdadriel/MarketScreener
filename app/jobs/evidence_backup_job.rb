@@ -12,8 +12,7 @@ class EvidenceBackupJob < ApplicationJob
   private
 
   def alert_failure(r)
-    notifier = TelegramNotifier.new(asset_type: "stock")
-    return unless notifier.send(:configured?)
-    notifier.send(:post_message, "🚨 *Backup bukti gagal*: #{r.failed_tables.join(', ')} — cek storage/log.")
+    TelegramNotifier.new(asset_type: "stock")
+      .send_text("🚨 *Backup bukti gagal*: #{r.failed_tables.join(', ')} — cek storage/log.")
   end
 end
