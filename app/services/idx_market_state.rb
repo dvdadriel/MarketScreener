@@ -11,6 +11,10 @@
 # supaya pemulihan cepat; state sehat 1 jam.
 class IdxMarketState
   SYMBOL    = "^JKSE".freeze
+  # Histeresis anti-whipsaw jalur LIVE (plan H7, tervalidasi backtest 2y & 3y:
+  # ret/alpha/maxDD semua membaik, tak pernah lebih buruk). Regime tak flip di
+  # satu hari — perlu CONFIRM_DAYS hari bursa berturut-turut searah dulu.
+  CONFIRM_DAYS = 5
   CACHE_KEY = "idx_market_state".freeze
   CACHE_TTL = 1.hour
   DEGRADED_TTL   = 5.minutes
@@ -20,9 +24,13 @@ class IdxMarketState
   # Backtest bisa set Thread.current[:backtest_as_of] (Time) → regime dihitung dari
   # histori ^JKSE tersimpan (asset_type "index") sampai tanggal itu (as-of, tanpa
   # lookahead). Atau [:backtest_bypass_regime] → tak memblokir. Default: live.
+  #
+  # Thread.current[:regime_confirm_days] (plan H7, hipotesis diuji backtest): kalau
+  # >0, regime tak langsung flip di satu hari — perlu N hari bursa berturut-turut
+  # searah sebelum berubah (anti-whipsaw). Default 0 = perilaku lama (flip instan).
   def self.long_blocked?
     if (t = Thread.current[:backtest_as_of])
-      return regime_as_of(t)
+      return regime_as_of(t, confirm_days: Thread.current[:regime_confirm_days].to_i)
     end
     return false if Thread.current[:backtest_bypass_regime]
     current_state[:long_blocked]
@@ -34,13 +42,45 @@ class IdxMarketState
   end
   def self.reason        = current_state[:reason]
 
-  def self.regime_as_of(date)
-    closes = closes_as_of(date)
+  def self.regime_as_of(date, confirm_days: 0)
+    confirmed_blocked(closes_as_of(date), confirm_days)
+  end
+
+  # Regime blocked/tidak dengan histeresis. confirm_days=0 → raw (flip instan);
+  # >0 → butuh N hari searah berturut-turut sebelum berubah. Dipakai jalur live
+  # (CONFIRM_DAYS) maupun backtest as-of (thread-local).
+  def self.confirmed_blocked(closes, confirm_days)
     return false if closes.length < 50   # fail-open: data kurang → jangan blokir
-    last  = closes.last
-    ma50  = avg(closes, 50)
+    return raw_blocked(closes) if confirm_days.zero?
+
+    count = closes.length - 49   # jumlah hari yang punya MA50 computable
+    apply_hysteresis(raw_series(closes, count), confirm_days)
+  end
+
+  def self.raw_blocked(closes)
+    ma50 = avg(closes, 50)
+    return false unless ma50
     ma200 = avg(closes, 200)
-    last < ma50 || (ma200 && ma50 < ma200)
+    closes.last < ma50 || (ma200 && ma50 < ma200)
+  end
+
+  # Raw blocked/tidak per hari untuk `count` hari terakhir (rolling MA50/MA200).
+  def self.raw_series(closes, count)
+    n = closes.length
+    (0...count).map { |k| raw_blocked(closes[0..(n - count + k)]) }
+  end
+
+  # State machine: regime hanya flip kalau raw signal SAMA selama `confirm_days`
+  # hari berturut-turut berlawanan dengan state terkonfirmasi saat ini.
+  def self.apply_hysteresis(series, confirm_days)
+    return series.last if series.size <= confirm_days
+    state = series.first
+    series.each_index do |i|
+      next if i < confirm_days - 1
+      window = series[(i - confirm_days + 1)..i]
+      state = window.first if window.uniq.size == 1 && window.first != state
+    end
+    state
   end
 
   def self.closes_as_of(date)
@@ -66,21 +106,35 @@ class IdxMarketState
 
     last  = closes.last
     ma50  = avg(closes, 50)
-    ma200 = avg(closes, 200)
 
-    blocked = last < ma50 || (ma200 && ma50 < ma200)
+    blocked = confirmed_blocked(closes, CONFIRM_DAYS)
     # Simpan regime terakhir yang sahih — fallback saat fetch berikutnya gagal.
     Rails.cache.write(LAST_KNOWN_KEY, { long_blocked: blocked, checked_at: Time.current },
                       expires_in: LAST_KNOWN_TTL)
     {
       long_blocked: blocked,
       closes:       closes,
-      reason:       blocked ? "IHSG risk-off (close #{last.round} vs MA50 #{ma50&.round})" : "IHSG risk-on",
+      reason:       blocked ? "IHSG risk-off (#{block_reason(closes, last, ma50)})" : "IHSG risk-on",
       checked_at:   Time.current
     }
   rescue => e
     Rails.logger.warn("[IdxMarketState] #{e.class}: #{e.message}")
     degraded_state(e.message)
+  end
+
+  # Sebab risk-off sebenarnya: harga di bawah MA50, death cross (MA50<MA200), atau
+  # histeresis masih menahan status risk-off lama (raw sudah tak blocked, tunggu konfirmasi).
+  def self.block_reason(closes, last, ma50)
+    ma200 = avg(closes, 200)
+    if !raw_blocked(closes)
+      "histeresis menahan, #{CONFIRM_DAYS}h konfirmasi"
+    elsif last < ma50
+      "close #{last.round} < MA50 #{ma50&.round}"
+    elsif ma200 && ma50 < ma200
+      "death cross: MA50 #{ma50&.round} < MA200 #{ma200.round}"
+    else
+      "risk-off"
+    end
   end
 
   def self.avg(closes, n)

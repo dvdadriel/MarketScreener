@@ -78,4 +78,38 @@ class IdxMarketStateTest < ActiveSupport::TestCase
       end
     end
   end
+
+  # Plan H7: regime hysteresis (fungsi murni, tanpa DB) — blip singkat tak boleh
+  # membuat regime flip; sinyal yang bertahan `confirm_days` harus flip.
+  test "apply_hysteresis ignores a blip shorter than confirm_days" do
+    series = ([ false ] * 5) + [ true ] + ([ false ] * 5)
+    assert_equal false, IdxMarketState.apply_hysteresis(series, 3)
+  end
+
+  test "apply_hysteresis flips once signal persists for confirm_days consecutive days" do
+    series = ([ false ] * 5) + ([ true ] * 3) + ([ false ] * 2)   # cuma 2 hari balik false setelahnya
+    assert_equal true, IdxMarketState.apply_hysteresis(series, 3)
+  end
+
+  test "compute_state (live) applies CONFIRM_DAYS hysteresis — a short dip doesn't flip to risk-off" do
+    # Naik mulus 210 hari lalu 3 hari anjlok di bawah MA50. Raw (last<MA50) = blocked,
+    # tapi blip 3 hari < CONFIRM_DAYS(5) → regime live harus tetap risk-on.
+    closes = (1..210).to_a + [ 50, 50, 50 ]
+    stub_klines(rows_from(closes)) do
+      state = IdxMarketState.compute_state
+      refute state[:long_blocked], "blip < CONFIRM_DAYS tak boleh flip regime live: #{state[:reason]}"
+    end
+  end
+
+  test "regime_as_of with confirm_days wired through, matches raw for a clean uptrend" do
+    base = Time.utc(2026, 1, 1)
+    60.times do |i|
+      Candle.create!(symbol: IdxMarketState::SYMBOL, timeframe: "1d", asset_type: "index",
+                     open: 100 + i, high: 100 + i, low: 100 + i, close: 100 + i, volume: 1,
+                     opened_at: base + i.days)
+    end
+    as_of = base + 59.days
+    refute IdxMarketState.regime_as_of(as_of, confirm_days: 0)
+    refute IdxMarketState.regime_as_of(as_of, confirm_days: 3)
+  end
 end
