@@ -48,6 +48,14 @@ class MomentumRankingServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test "ignore_regime still ranks during risk-off (watchlist, not a buy signal)" do
+    series("STRONG.JK", closes: (1..15).map { |i| 100.0 + i * 5 })
+    with_regime(blocked: true) do
+      picks = MomentumRankingService.new(symbols: %w[STRONG.JK], ignore_regime: true, **opts).call
+      assert_equal %w[STRONG.JK], picks.map { |p| p[:symbol] }
+    end
+  end
+
   test "excludes pump (momentum > cap) — anti-gorengan" do
     # naik >100% (pump); harga tinggi & likuid, jadi HANYA MAX_MOMENTUM yang membuang.
     series("PUMP.JK", closes: (1..15).map { |i| 100.0 + i * 40 })
@@ -82,6 +90,39 @@ class MomentumRankingServiceTest < ActiveSupport::TestCase
       assert_equal 1, MomentumRankingService.new(symbols: %w[OK.JK], **opts).call.size
       # portofolio 20 miliar → posisi 4 miliar >> 5% turnover → dibuang
       assert_empty MomentumRankingService.new(symbols: %w[OK.JK], portfolio_idr: 20_000_000_000, top_n: 5, lookback: 10, skip: 2).call
+    end
+  end
+
+  # Residual momentum harus memilih saham yang menang KARENA dirinya sendiri, bukan
+  # karena beta tinggi ke IHSG. Konstruksi: BETA.JK return 2× indeks (residual nol,
+  # tapi return mentah TERBESAR), IDIO.JK return 1× indeks + 0,1%/hari (residual positif).
+  # Ranking mentah → BETA menang; ranking residual → IDIO menang.
+  test "residual momentum ranks idiosyncratic winner above pure-beta winner" do
+    n    = 75
+    base = Time.utc(2026, 1, 1)
+    # Return indeks harus BERVARIASI — kalau konstan, beta menyerap seluruh drift saham
+    # dan residual selalu nol (konstruksi degenerate).
+    r    = ->(i) { 0.002 + 0.004 * Math.sin(i) }
+    cum  = ->(i, extra) { (0...i).sum { |k| r.(k) + extra } }
+    n.times do |i|
+      Candle.create!(symbol: IdxMarketState::SYMBOL, timeframe: "1d", asset_type: "index",
+                     open: 1000, high: 1000, low: 1000, close: 1000 * Math.exp(cum.(i, 0)),
+                     volume: 0, opened_at: base + i.days)
+    end
+    # BETA.JK: persis 2× return indeks → alpha nol, tapi return mentah TERBESAR.
+    series("BETA.JK", closes: (0...n).map { |i| 100.0 * Math.exp(2 * cum.(i, 0)) })
+    # IDIO.JK: 1× indeks + 0,1%/hari milik sendiri → alpha positif.
+    series("IDIO.JK", closes: (0...n).map { |i| 100.0 * Math.exp(cum.(i, 0.001)) })
+
+    o = { lookback: 60, skip: 5, top_n: 5 }
+    with_regime(blocked: false) do
+      raw = MomentumRankingService.new(symbols: %w[BETA.JK IDIO.JK], **o).call
+      assert_equal "BETA.JK", raw.first[:symbol], "return mentah: beta tinggi menang"
+
+      res = MomentumRankingService.new(symbols: %w[BETA.JK IDIO.JK], residual: true, **o).call
+      assert_equal "IDIO.JK", res.first[:symbol], "residual: excess return sendiri yang menang"
+      assert_in_delta 0.0, res.find { |x| x[:symbol] == "BETA.JK" }[:momentum], 0.01,
+                      "saham yang cuma ikut indeks → residual ~0"
     end
   end
 

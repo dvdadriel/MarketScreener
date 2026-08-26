@@ -24,9 +24,11 @@ class MomentumRankingService
   #   max_extension: anti-chase — tunda entry kalau close terlalu jauh di atas MA20
   #                  (mis. 0.15 = >15% di atas MA20 = overextended, rawan pullback).
   #                  Default OFF sampai backtest membuktikan membaik (plan #5).
+  # ignore_regime: hitung ranking WALAU risk-off — HANYA untuk melihat (watchlist),
+  # BUKAN sinyal beli. Regime tetap gate saat aksi nyata (snapshot/paper/live).
   def initialize(as_of: nil, symbols: nil, lookback: LOOKBACK, skip: SKIP, top_n: TOP_N,
                  max_momentum: MAX_MOMENTUM, min_price: MIN_PRICE, max_extension: nil,
-                 portfolio_idr: PORTFOLIO_IDR)
+                 portfolio_idr: PORTFOLIO_IDR, ignore_regime: false, residual: false)
     @as_of         = as_of
     @symbols       = symbols
     @lookback      = lookback
@@ -36,6 +38,8 @@ class MomentumRankingService
     @min_price     = min_price
     @max_extension = max_extension
     @portfolio_idr = portfolio_idr.to_f
+    @ignore_regime = ignore_regime
+    @residual      = residual
   end
 
   def universe
@@ -45,7 +49,7 @@ class MomentumRankingService
   # Returns [{symbol:, momentum:, last_close:}, ...] top-N by momentum, atau []
   # kalau regime risk-off (portofolio ke cash).
   def call
-    return [] if IdxMarketState.long_blocked?
+    return [] if !@ignore_regime && IdxMarketState.long_blocked?
 
     universe.filter_map { |sym| score(sym) }
             .sort_by { |r| -r[:momentum] }
@@ -80,7 +84,11 @@ class MomentumRankingService
     past   = closes[-(@skip + @lookback + 1)]      # harga ~7 bulan lalu
     return nil if past.nil? || past.zero?
 
-    mom = recent / past - 1.0
+    mom = if @residual
+      residual_momentum(candles) or return nil
+    else
+      recent / past - 1.0
+    end
     return nil if @max_momentum && mom > @max_momentum   # buang pump parabolik
 
     # Anti-chase: overextended di atas MA20 → rawan pullback tajam, tunda entry.
@@ -90,5 +98,54 @@ class MomentumRankingService
     end
 
     { symbol: symbol, momentum: mom.round(4), last_close: last }
+  end
+
+  # Momentum RESIDUAL (beta-adjusted): bagian return yang TIDAK dijelaskan gerakan IHSG.
+  # OLS satu faktor DENGAN intercept atas return harian (log) di jendela momentum;
+  # skornya = intercept × jumlah hari, dikembalikan sebagai return biasa supaya filter
+  # MAX_MOMENTUM & tampilan persen tetap bermakna. Ini Jensen's alpha atas jendela itu.
+  #
+  # Kenapa intercept, bukan Σresidual: dengan intercept Σresidual in-sample = 0, jadi
+  # intercept-lah yang memuat return tak terjelaskan. Varian tanpa intercept sempat
+  # dicoba dan DIBUANG — beta-nya menyerap sebagian drift saham (bias sistematis yang
+  # justru mengecilkan sinyal yang dicari).
+  #
+  # Ini varian SATU faktor — bukan residual momentum 3-faktor Blitz; IDX tak punya
+  # faktor SMB/HML gratis. Hipotesis yang diuji: ranking tanpa tilt beta (saham yang
+  # naik cuma karena ikut indeks tersaring) lebih baik dari return mentah.
+  def residual_momentum(candles)
+    window = candles[-(@skip + @lookback + 1)..-(@skip + 1)]
+    return nil if window.nil? || window.length < 30
+
+    mkt   = ihsg_by_date
+    pairs = window.each_cons(2).filter_map do |a, b|
+      ia = mkt[a.opened_at.to_date]
+      ib = mkt[b.opened_at.to_date]
+      pa = a.close.to_f
+      pb = b.close.to_f
+      next if ia.nil? || ib.nil? || ia.zero? || pa.zero? || pb.zero?
+      [ Math.log(pb / pa), Math.log(ib / ia) ]
+    end
+    return nil if pairs.length < 30   # data indeks bolong → jangan reka
+
+    n     = pairs.size
+    s_bar = pairs.sum { |s, _| s } / n
+    m_bar = pairs.sum { |_, m| m } / n
+    denom = pairs.sum { |_, m| (m - m_bar)**2 }
+    return nil if denom.zero?   # indeks tak bergerak → beta tak terdefinisi
+
+    beta  = pairs.sum { |s, m| (m - m_bar) * (s - s_bar) } / denom
+    alpha = s_bar - beta * m_bar          # return harian tak terjelaskan indeks
+    Math.exp(alpha * n) - 1.0
+  end
+
+  # Close IHSG per tanggal (as-of aware) — pembanding untuk regresi residual.
+  def ihsg_by_date
+    @ihsg_by_date ||= begin
+      scope = Candle.where(asset_type: "index", symbol: IdxMarketState::SYMBOL, timeframe: "1d")
+      scope = scope.where("opened_at <= ?", @as_of) if @as_of
+      scope.order(:opened_at).pluck(:opened_at, :close)
+           .each_with_object({}) { |(t, c), h| h[t.to_date] = c.to_f }
+    end
   end
 end
