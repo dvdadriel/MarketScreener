@@ -86,6 +86,44 @@ class EvidenceBackupServiceTest < ActiveSupport::TestCase
     assert_empty Dir.glob(@dir.join("*.sql.gz")), "tak boleh ada arsip dari dump gagal"
   end
 
+  # pg_dump WAJIB dijalankan dengan -w (never prompt). pg_env membuang PGPASSWORD
+  # saat env var passwordnya kosong — bentuk produksi yang normal — dan tanpa -w
+  # pg_dump lalu MEMINTA password. Dengan tty di stdin (rake task, rails console,
+  # worker di tmux) backup harian menggantung selamanya, bukan gagal: alertnya
+  # tak pernah berbunyi dan job-nya diam-diam menahan slot antrian.
+  test "runs pg_dump with -w so it can never block on a password prompt" do
+    argv_log = @bin.join("pg_dump_argv")
+    script   = <<~SH
+      #!/bin/sh
+      printf '%s\\n' "$@" > "#{argv_log}"
+      exit 1
+    SH
+
+    with_fake_bin("pg_dump", script) { EvidenceBackupService.new(dir: @dir).call }
+
+    argv = File.read(argv_log).lines.map(&:chomp)
+    assert_includes argv, "-w", "pg_dump harus dipanggil dengan -w (never prompt)"
+  end
+
+  # Alert Telegram sengaja terse ("Backup bukti gagal: signals"), jadi LOG-lah
+  # satu-satunya tempat operator bisa membedakan auth gagal / tabel hilang / disk
+  # penuh. Membuang stderr pg_dump ke /dev/null membuat diagnosa jam 5 pagi
+  # mustahil — rescue Ruby tak pernah melihat diagnosis pg_dump sendiri.
+  test "logs pg_dump stderr when the dump fails" do
+    io   = StringIO.new
+    orig = Rails.logger
+    Rails.logger = ActiveSupport::Logger.new(io)
+
+    svc = EvidenceBackupService.new(dir: @dir)
+    svc.define_singleton_method(:database) { "no_such_db_xyz" }
+    refute svc.call.success?
+
+    assert_match(/no_such_db_xyz/, io.string,
+                 "stderr pg_dump harus masuk log, bukan /dev/null")
+  ensure
+    Rails.logger = orig
+  end
+
   test "rotates dumps older than retention window" do
     FileUtils.mkdir_p(@dir)
     old = @dir.join("momentum_snapshots-2020-01-01.sql.gz")

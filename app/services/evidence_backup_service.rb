@@ -1,3 +1,5 @@
+require "open3"
+
 # Backup harian tabel bukti forward-tracking (plan H2). Tabel ini adalah dasar
 # keputusan gate promosi 8 minggu (§1.3) — kehilangannya berarti mulai dari nol.
 # Dump plain SQL + gzip (bisa diperiksa manual), rotasi RETENTION_DAYS.
@@ -46,10 +48,18 @@ class EvidenceBackupService
     out = @dir.join("#{table}-#{date}.sql.gz")
     raw = @dir.join("#{table}-#{date}.sql.part")
 
-    ok = system(pg_env, "pg_dump", "-t", table, "-d", db, "-f", raw.to_s,
-                out: File::NULL, err: File::NULL)
-    return false unless ok && File.size?(raw).to_i > MIN_DUMP_BYTES
-    return false unless system("gzip", "-f", raw.to_s, out: File::NULL, err: File::NULL)
+    # -w = never prompt. pg_env membuang PGPASSWORD kalau env var-nya kosong (bentuk
+    # produksi yang normal), dan tanpa -w pg_dump lalu MEMINTA password: dengan tty
+    # di stdin (rake, rails console, worker di tmux) backup harian menggantung
+    # selamanya alih-alih gagal, jadi alertnya tak pernah berbunyi.
+    ok, err = run(pg_env, "pg_dump", "-w", "-t", table, "-d", db, "-f", raw.to_s)
+    return log_failure(table, "pg_dump", err) unless ok
+
+    size = File.size?(raw).to_i
+    return log_failure(table, "pg_dump", "output #{size} byte <= MIN_DUMP_BYTES") unless size > MIN_DUMP_BYTES
+
+    ok, err = run({}, "gzip", "-f", raw.to_s)
+    return log_failure(table, "gzip", err) unless ok
 
     File.rename("#{raw}.gz", out)
     true
@@ -65,6 +75,23 @@ class EvidenceBackupService
     # menumpuk selamanya. Setelah rename sukses tak ada satupun dari keduanya
     # tersisa, jadi pembersihan tanpa syarat ini aman.
     [ raw, "#{raw}.gz" ].each { |f| File.delete(f) if f && File.exist?(f) } if raw
+  end
+
+  # Open3, bukan system+err: File::NULL: stderr perlu DITANGKAP, bukan dibuang.
+  # stdout memang tak dipakai (pg_dump menulis ke -f, gzip ke file), tapi tetap
+  # ditangkap supaya tak pernah bocor ke log job.
+  def run(env, *argv)
+    _out, err, status = Open3.capture3(env, *argv)
+    [ status.success?, err ]
+  end
+
+  # Pesan Telegram sengaja terse, jadi LOG-lah satu-satunya tempat operator bisa
+  # membedakan auth ditolak / tabel hilang / disk penuh. Baris pertama stderr
+  # sudah memuat diagnosis pg_dump; sisanya jarang menambah informasi.
+  def log_failure(table, step, detail)
+    first = detail.to_s.lines.first&.strip
+    Rails.logger.error("[EvidenceBackupService] #{table}: #{step} gagal#{" — #{first}" if first.present?}")
+    false
   end
 
   def db_config = ActiveRecord::Base.connection_db_config.configuration_hash
