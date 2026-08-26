@@ -11,6 +11,9 @@ class HealthCheck
   WORKER_STALE_AFTER  = 5.minutes
   # price/paper jobs finish every few minutes, so silence here means trouble.
   JOB_ACTIVITY_WINDOW = 15.minutes
+  # Buffer setelah jadwal MomentumSnapshotJob (17:00 WIB weekday) sebelum menuntut ada data.
+  MOMENTUM_SNAPSHOT_CUTOFF_HOUR = 17
+  MOMENTUM_SNAPSHOT_CUTOFF_MIN  = 30
 
   Result = Struct.new(:checks, keyword_init: true) do
     def healthy?
@@ -38,6 +41,7 @@ class HealthCheck
     else
       checks[:stock_freshness] = stock_freshness_check
     end
+    checks[:momentum_freshness] = momentum_freshness_check
     Result.new(checks: checks)
   end
 
@@ -91,5 +95,21 @@ class HealthCheck
       ok: age.present? && age <= STOCK_STALE_AFTER,
       detail: latest ? "latest 1h candle #{age.round}s old" : "no stock candles"
     }
+  end
+
+  # Plan H5: deteksi MomentumSnapshotJob gagal diam-diam. Weekend/pra-cutoff = ok
+  # trivial (belum saatnya ada data). Catatan: tak sadar libur bursa (false-positive
+  # kecil kalau hari itu libur) — sama seperti cron weekday job lain di recurring.yml.
+  def momentum_freshness_check
+    now = Time.current.in_time_zone(IdxMarket::TZ)
+    return { ok: true, detail: "weekend" } if now.saturday? || now.sunday?
+
+    cutoff = now.change(hour: MOMENTUM_SNAPSHOT_CUTOFF_HOUR, min: MOMENTUM_SNAPSHOT_CUTOFF_MIN)
+    return { ok: true, detail: "belum waktunya (cutoff #{MOMENTUM_SNAPSHOT_CUTOFF_HOUR}:#{format('%02d', MOMENTUM_SNAPSHOT_CUTOFF_MIN)} WIB)" } if now < cutoff
+
+    last = MomentumSnapshot.snapshot_dates.last
+    { ok: last == now.to_date, detail: last ? "snapshot terakhir #{last}" : "belum pernah ada snapshot" }
+  rescue StandardError => e
+    { ok: false, detail: "#{e.class}: #{e.message}" }
   end
 end

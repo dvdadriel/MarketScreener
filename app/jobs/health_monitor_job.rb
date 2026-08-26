@@ -5,7 +5,7 @@ class HealthMonitorJob < ApplicationJob
   # but freshness + dead workers are the "silent stop" signals worth alerting on.
   # Freshness key mengikuti aset aktif (crypto_freshness saat crypto on, else stock_freshness);
   # slice mengabaikan key yang tak ada, jadi aman mencantumkan keduanya.
-  MONITORED = %i[crypto_freshness stock_freshness queue_workers].freeze
+  MONITORED = %i[crypto_freshness stock_freshness queue_workers momentum_freshness].freeze
   ALERT_COOLDOWN = 30.minutes
   LAST_ALERT_KEY = "health_monitor:last_alert_at".freeze
   DEGRADED_KEY   = "health_monitor:degraded".freeze
