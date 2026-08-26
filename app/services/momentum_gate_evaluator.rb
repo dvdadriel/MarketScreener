@@ -37,7 +37,7 @@ class MomentumGateEvaluator
       max_drawdown: r[:max_drawdown], max_dd_ceiling: MAX_DD_CEILING,
       regime_consistent: consistent, criteria: criteria,
       evaluated: criteria[:duration],              # kriteria lain baru bermakna setelah durasi cukup
-      promote: criteria[:duration] && criteria.values.all?
+      promote: criteria.values.all?              # :duration ikut di dalamnya
     )
   end
 

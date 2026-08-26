@@ -133,6 +133,10 @@ class IdxMarketState
     elsif ma200 && ma50 < ma200
       "death cross: MA50 #{ma50&.round} < MA200 #{ma200.round}"
     else
+      # TAK TERJANGKAU: block_reason hanya dipanggil saat blocked, dan tiga cabang
+      # di atas sudah menghabiskan semua cara raw_blocked bisa true. Dibiarkan
+      # sebagai default defensif kalau syarat raw_blocked berubah — jangan dibaca
+      # sebagai kasus hidup.
       "risk-off"
     end
   end

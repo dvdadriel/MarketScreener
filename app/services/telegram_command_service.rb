@@ -65,11 +65,6 @@ class TelegramCommandService
     reply(chat_id, dispatch(text))
   end
 
-  # Bangun teks /rank tanpa lewat parsing perintah (dipakai RankReportJob terjadwal).
-  def rank_message(universe = "extended")
-    cmd_rank(universe)
-  end
-
   # Satu format daftar ranking untuk /rank manual maupun RankReportJob — jangan
   # duplikasi teksnya di dua tempat.
   def self.format_rank(picks, blocked)
