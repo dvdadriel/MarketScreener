@@ -158,10 +158,11 @@ class MomentumRankingServiceTest < ActiveSupport::TestCase
     end
   end
 
-  # Close IHSG NEGATIF sama merusaknya dengan nol, dan lebih sunyi: Math.log(-1)
-  # melempar Math::DomainError yang BUKAN turunan StandardError, jadi tak satu pun
-  # rescue di jalur ini menangkapnya — blast radius identik dengan bug close nol
-  # (seluruh ranking jatuh), sumbernya juga identik: data Yahoo korup.
+  # Close IHSG NEGATIF sama merusaknya dengan nol: Math.log(-1) melempar
+  # Math::DomainError, dan di seluruh jalur ini tidak ada rescue sama sekali —
+  # tidak di MomentumRankingService, tidak di MomentumSnapshotJob — jadi
+  # exception-nya lolos dari #call dan menjatuhkan SELURUH ranking. Blast radius
+  # identik dengan bug close nol, sumbernya juga identik: data Yahoo korup.
   test "one negative IHSG close does not break residual ranking" do
     residual_fixture(bad_close: -1000.0)
     o = { lookback: 60, skip: 5, top_n: 5 }
@@ -172,6 +173,10 @@ class MomentumRankingServiceTest < ActiveSupport::TestCase
       end
       assert_equal "IDIO.JK", res.first[:symbol]
       assert res.all? { |x| x[:momentum].finite? }, "momentum NaN/Inf tak boleh lolos ke hasil"
+      # Simetris dengan test close nol: bukan cuma urutannya benar, MAGNITUDO-nya
+      # juga — saham yang cuma ikut indeks tetap residual ~0 walau ada hari rusak.
+      assert_in_delta 0.0, res.find { |x| x[:symbol] == "BETA.JK" }[:momentum], 0.01,
+                      "saham yang cuma ikut indeks → residual ~0 walau ada satu hari negatif"
     end
   end
 

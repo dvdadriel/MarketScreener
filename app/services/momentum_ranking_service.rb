@@ -126,8 +126,10 @@ class MomentumRankingService
       # Harus POSITIF, bukan sekadar bukan-nol — dan ib WAJIB ikut diperiksa:
       #   nol     → log(0) = -Infinity → m_bar -Infinity → denom NaN, dan
       #             `denom.zero?` di bawah TIDAK menangkap NaN;
-      #   negatif → Math.log melempar Math::DomainError, yang BUKAN turunan
-      #             StandardError, jadi tak ada rescue di jalur ini menangkapnya.
+      #   negatif → Math.log melempar Math::DomainError, dan di SELURUH jalur ini
+      #             tidak ada rescue sama sekali (baik di service ini maupun di
+      #             MomentumSnapshotJob), jadi satu simbol rusak menjatuhkan
+      #             SELURUH ranking.
       # Syarat <= 0 ini mencakup cek .zero? sebelumnya, jadi guardnya justru
       # lebih pendek sekaligus lebih ketat.
       next if ia.nil? || ib.nil? || ia <= 0 || ib <= 0 || pa <= 0 || pb <= 0
