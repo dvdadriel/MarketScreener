@@ -5,10 +5,20 @@
 class MomentumSnapshotBackfillService
   MAX_BACKFILL_DAYS = 60   # gap lebih lama = butuh investigasi manual, bukan auto-fill
 
+  # Mengembalikan jumlah hari yang BERHASIL tercatat, bukan yang dicoba.
+  # backfill_day sengaja menelan exception (satu hari rusak tak boleh
+  # menjatuhkan sisanya), jadi menghitung days.size akan melaporkan sukses
+  # meski nol hari benar-benar tercatat — dan kontinuitas bukti justru hal
+  # yang service ini jaga.
   def call
-    days = missing_trading_days
-    days.each { |d| backfill_day(d) }
-    days.size
+    days     = missing_trading_days
+    recorded = days.count { |d| backfill_day(d) }
+
+    if recorded < days.size
+      Rails.logger.warn("[MomentumSnapshotBackfillService] #{days.size - recorded}/#{days.size} hari GAGAL di-backfill — bukti berlubang, lihat log error di atas")
+    end
+
+    recorded
   end
 
   private
@@ -40,9 +50,13 @@ class MomentumSnapshotBackfillService
     MomentumSnapshot.record!(date: date, picks: picks, regime: regime)
 
     Rails.logger.info("[MomentumSnapshotBackfillService] backfilled #{date}: #{regime}, #{picks.size} picks")
+    true
   rescue => e
     Rails.logger.error("[MomentumSnapshotBackfillService] #{date}: #{e.class}: #{e.message}")
+    false
   ensure
+    # ensure TIDAK mengubah nilai kembalian selama tak ada `return` eksplisit —
+    # jadi true/false di atas tetap yang dilaporkan ke `call`.
     Thread.current[:backtest_as_of] = nil
   end
 end

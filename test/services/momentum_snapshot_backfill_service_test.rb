@@ -43,4 +43,41 @@ class MomentumSnapshotBackfillServiceTest < ActiveSupport::TestCase
 
     assert_equal 0, second_run
   end
+
+  test "returns the number of days actually RECORDED, not merely attempted" do
+    today = Time.current.in_time_zone(IdxMarket::TZ).to_date
+    last  = today - 4
+    [ last, today - 3, today - 2, today - 1, today ].each { |d| index_candle(d) }
+    MomentumSnapshot.create!(snapshot_date: last, regime: "risk_on")
+
+    # Setiap hari gagal. backfill_day menelan exception dan hanya mencatat log,
+    # jadi tanpa perbaikan `call` melaporkan 3 hari "berhasil" padahal nol.
+    orig = MomentumRankingService.method(:new)
+    MomentumRankingService.define_singleton_method(:new) { |**| raise "boom" }
+    recorded = MomentumSnapshotBackfillService.new.call
+  ensure
+    MomentumRankingService.define_singleton_method(:new, orig)
+    assert_equal 0, recorded, "call harus melaporkan hari yang TERCATAT, bukan yang dicoba"
+    assert_equal 1, MomentumSnapshot.count, "hanya snapshot awal yang ada; tak ada yang tercatat"
+  end
+
+  test "counts only the days that succeed when some fail" do
+    today = Time.current.in_time_zone(IdxMarket::TZ).to_date
+    last  = today - 3
+    [ last, today - 2, today - 1, today ].each { |d| index_candle(d) }
+    MomentumSnapshot.create!(snapshot_date: last, regime: "risk_on")
+
+    # Gagal hanya pada pemanggilan pertama, sukses pada sisanya.
+    orig = MomentumRankingService.method(:new)
+    calls = 0
+    MomentumRankingService.define_singleton_method(:new) do |**kw|
+      calls += 1
+      raise "boom" if calls == 1
+      orig.call(**kw)
+    end
+    recorded = MomentumSnapshotBackfillService.new.call
+  ensure
+    MomentumRankingService.define_singleton_method(:new, orig)
+    assert_equal 1, recorded, "2 hari dicoba, 1 gagal, jadi 1 yang tercatat"
+  end
 end
