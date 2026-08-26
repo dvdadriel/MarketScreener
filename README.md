@@ -1,4 +1,4 @@
-# CryptoRadar
+# IdxScreener
 
 Screener saham IDX dengan **backtesting walk-forward, paper trading, dan alert Telegram**. Rails 8.1 + PostgreSQL + Solid Queue/Cache/Cable, jalan sebagai service always-on lokal (macOS LaunchAgent `com.cryptoradar`).
 
@@ -6,6 +6,15 @@ Screener saham IDX dengan **backtesting walk-forward, paper trading, dan alert T
 > Strategi aktif dalam observasi: **cross-sectional momentum** (forward tracking harian,
 > gate promosi 8 minggu). Hasil pengukuran beserta asumsi dan batasannya:
 > [`docs/backtest-results.md`](docs/backtest-results.md).
+
+![Dashboard](docs/images/dashboard.png)
+
+> **Catatan penamaan.** Nama yang terlihat pengguna adalah **IdxScreener**.
+> Beberapa identifier internal masih memakai nama lama secara sengaja: modul
+> Rails `CryptoScreener` (menggantinya adalah refactor yang menyentuh seluruh
+> konstanta aplikasi), label LaunchAgent `com.cryptoradar` (service-nya
+> berjalan; menggantinya butuh unload/load ulang), dan path direktori lokal.
+> Dibiarkan agar perubahan nama tidak beresiko mematikan service yang hidup.
 
 ## Masalah yang diselesaikan
 
@@ -76,7 +85,7 @@ Selain batasan metodologis di [`docs/backtest-results.md`](docs/backtest-results
 - **Belum di-deploy sebagai layanan publik.** Berjalan sebagai service lokal always-on; tidak ada autentikasi multi-user di dashboard.
 - **Sampel forward tracking masih pendek** — gate promosi 8 minggu belum tuntas.
 - **`pg_dump` stderr hanya baris pertama yang masuk log**, sehingga diagnosis kegagalan backup terbatas.
-- **Tidak ada test untuk `check_coverage!`** — guard yang menjaga kelengkapan data justru belum diuji.
+- **Nilai `MAX_MISSING_SHARE` belum dikalibrasi.** Guard-nya sudah punya test (termasuk yang memaku ambangnya), tapi angka 0,10-nya sendiri terbukti terlalu longgar di lapangan dan belum diperbaiki — mengubahnya butuh kalibrasi tersendiri, bukan tebakan.
 
 ## Lisensi
 

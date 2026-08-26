@@ -29,7 +29,7 @@ class HealthMonitorJob < ApplicationJob
     Rails.cache.write(DEGRADED_KEY, true, expires_in: 1.day)
     return if last && (Time.current.to_i - last) < ALERT_COOLDOWN.to_i
 
-    lines = [ "🩺 *CryptoRadar health degraded*", "" ]
+    lines = [ "🩺 *IdxScreener health degraded*", "" ]
     failing.each { |name, c| lines << "• `#{name}` — #{c[:detail]}" }
 
     if send_telegram(lines.join("\n"))
@@ -40,7 +40,7 @@ class HealthMonitorJob < ApplicationJob
   def handle_recovered
     return unless Rails.cache.read(DEGRADED_KEY)
 
-    send_telegram("✅ *CryptoRadar recovered* — all health checks passing")
+    send_telegram("✅ *IdxScreener recovered* — all health checks passing")
     Rails.cache.delete(DEGRADED_KEY)
     Rails.cache.delete(LAST_ALERT_KEY)
   end
