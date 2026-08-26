@@ -23,6 +23,26 @@ class MomentumRankingServiceTest < ActiveSupport::TestCase
   # lookback 10 + skip 2 => butuh 13 candle. Harga cukup tinggi supaya turnover > Rp 1M.
   def opts = { lookback: 10, skip: 2, top_n: 5 }
 
+  # Fixture regresi residual, dipakai beberapa test:
+  #   indeks   — return BERVARIASI; kalau konstan beta menyerap seluruh drift saham
+  #              dan residual selalu nol (konstruksi degenerate).
+  #   BETA.JK  — persis 2× return indeks → alpha nol, tapi return mentah TERBESAR.
+  #   IDIO.JK  — 1× indeks + 0,1%/hari milik sendiri → alpha positif.
+  # bad_close: sisipkan satu close indeks rusak (0 / negatif) di hari bad_at.
+  def residual_fixture(n: 75, bad_close: nil, bad_at: 40)
+    base = Time.utc(2026, 1, 1)
+    r    = ->(i) { 0.002 + 0.004 * Math.sin(i) }
+    cum  = ->(i, extra) { (0...i).sum { |k| r.(k) + extra } }
+    n.times do |i|
+      close = bad_close && i == bad_at ? bad_close : 1000 * Math.exp(cum.(i, 0))
+      Candle.create!(symbol: IdxMarketState::SYMBOL, timeframe: "1d", asset_type: "index",
+                     open: 1000, high: 1000, low: 1000, close: close,
+                     volume: 0, opened_at: base + i.days)
+    end
+    series("BETA.JK", closes: (0...n).map { |i| 100.0 * Math.exp(2 * cum.(i, 0)) })
+    series("IDIO.JK", closes: (0...n).map { |i| 100.0 * Math.exp(cum.(i, 0.001)) })
+  end
+
   test "ranks higher-momentum symbol first" do
     series("STRONG.JK", closes: (1..15).map { |i| 100.0 + i * 5 })   # naik kuat
     series("FLAT.JK",   closes: Array.new(15, 100.0))                # datar
@@ -98,22 +118,7 @@ class MomentumRankingServiceTest < ActiveSupport::TestCase
   # tapi return mentah TERBESAR), IDIO.JK return 1× indeks + 0,1%/hari (residual positif).
   # Ranking mentah → BETA menang; ranking residual → IDIO menang.
   test "residual momentum ranks idiosyncratic winner above pure-beta winner" do
-    n    = 75
-    base = Time.utc(2026, 1, 1)
-    # Return indeks harus BERVARIASI — kalau konstan, beta menyerap seluruh drift saham
-    # dan residual selalu nol (konstruksi degenerate).
-    r    = ->(i) { 0.002 + 0.004 * Math.sin(i) }
-    cum  = ->(i, extra) { (0...i).sum { |k| r.(k) + extra } }
-    n.times do |i|
-      Candle.create!(symbol: IdxMarketState::SYMBOL, timeframe: "1d", asset_type: "index",
-                     open: 1000, high: 1000, low: 1000, close: 1000 * Math.exp(cum.(i, 0)),
-                     volume: 0, opened_at: base + i.days)
-    end
-    # BETA.JK: persis 2× return indeks → alpha nol, tapi return mentah TERBESAR.
-    series("BETA.JK", closes: (0...n).map { |i| 100.0 * Math.exp(2 * cum.(i, 0)) })
-    # IDIO.JK: 1× indeks + 0,1%/hari milik sendiri → alpha positif.
-    series("IDIO.JK", closes: (0...n).map { |i| 100.0 * Math.exp(cum.(i, 0.001)) })
-
+    residual_fixture
     o = { lookback: 60, skip: 5, top_n: 5 }
     with_regime(blocked: false) do
       raw = MomentumRankingService.new(symbols: %w[BETA.JK IDIO.JK], **o).call
@@ -132,19 +137,7 @@ class MomentumRankingServiceTest < ActiveSupport::TestCase
   # `NaN > cap` false, lalu sort_by { -momentum } meledak ArgumentError — di mode residual
   # itu berarti MomentumSnapshotJob kehilangan tulisan bukti hari itu.
   test "one zero IHSG close does not break residual ranking" do
-    n    = 75
-    base = Time.utc(2026, 1, 1)
-    r    = ->(i) { 0.002 + 0.004 * Math.sin(i) }
-    cum  = ->(i, extra) { (0...i).sum { |k| r.(k) + extra } }
-    n.times do |i|
-      close = i == 40 ? 0.0 : 1000 * Math.exp(cum.(i, 0))   # satu hari rusak
-      Candle.create!(symbol: IdxMarketState::SYMBOL, timeframe: "1d", asset_type: "index",
-                     open: 1000, high: 1000, low: 1000, close: close,
-                     volume: 0, opened_at: base + i.days)
-    end
-    series("BETA.JK", closes: (0...n).map { |i| 100.0 * Math.exp(2 * cum.(i, 0)) })
-    series("IDIO.JK", closes: (0...n).map { |i| 100.0 * Math.exp(cum.(i, 0.001)) })
-
+    residual_fixture(bad_close: 0.0)
     o = { lookback: 60, skip: 5, top_n: 5 }
     with_regime(blocked: false) do
       res = nil
@@ -157,6 +150,23 @@ class MomentumRankingServiceTest < ActiveSupport::TestCase
       assert res.all? { |x| x[:momentum].finite? }, "momentum NaN/Inf tak boleh lolos ke hasil"
       assert_in_delta 0.0, res.find { |x| x[:symbol] == "BETA.JK" }[:momentum], 0.01,
                       "saham yang cuma ikut indeks → residual ~0 walau ada satu hari rusak"
+    end
+  end
+
+  # Close IHSG NEGATIF sama merusaknya dengan nol, dan lebih sunyi: Math.log(-1)
+  # melempar Math::DomainError yang BUKAN turunan StandardError, jadi tak satu pun
+  # rescue di jalur ini menangkapnya — blast radius identik dengan bug close nol
+  # (seluruh ranking jatuh), sumbernya juga identik: data Yahoo korup.
+  test "one negative IHSG close does not break residual ranking" do
+    residual_fixture(bad_close: -1000.0)
+    o = { lookback: 60, skip: 5, top_n: 5 }
+    with_regime(blocked: false) do
+      res = nil
+      assert_nothing_raised do
+        res = MomentumRankingService.new(symbols: %w[BETA.JK IDIO.JK], residual: true, **o).call
+      end
+      assert_equal "IDIO.JK", res.first[:symbol]
+      assert res.all? { |x| x[:momentum].finite? }, "momentum NaN/Inf tak boleh lolos ke hasil"
     end
   end
 
