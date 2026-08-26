@@ -123,7 +123,9 @@ class MomentumRankingService
       ib = mkt[b.opened_at.to_date]
       pa = a.close.to_f
       pb = b.close.to_f
-      next if ia.nil? || ib.nil? || ia.zero? || pa.zero? || pb.zero?
+      # ib.zero? WAJIB ikut: log(0/ia) = -Infinity → m_bar -Infinity → denom NaN,
+      # dan `denom.zero?` di bawah TIDAK menangkap NaN.
+      next if ia.nil? || ib.nil? || ia.zero? || ib.zero? || pa.zero? || pb.zero?
       [ Math.log(pb / pa), Math.log(ib / ia) ]
     end
     return nil if pairs.length < 30   # data indeks bolong → jangan reka
@@ -136,16 +138,28 @@ class MomentumRankingService
 
     beta  = pairs.sum { |s, m| (m - m_bar) * (s - s_bar) } / denom
     alpha = s_bar - beta * m_bar          # return harian tak terjelaskan indeks
-    Math.exp(alpha * n) - 1.0
+    mom   = Math.exp(alpha * n) - 1.0
+    # Sabuk + bretel: satu NaN/Infinity yang lolos ke hasil membuat MAX_MOMENTUM
+    # tak menyaring (`NaN > cap` false) dan meledakkan sort_by di #call — SATU
+    # simbol rusak menjatuhkan SELURUH ranking. Lebih baik simbolnya dibuang.
+    return nil unless mom.finite?
+
+    mom
   end
 
   # Close IHSG per tanggal (as-of aware) — pembanding untuk regresi residual.
+  # Close 0 (data Yahoo rusak) DIBUANG di sumber, sama seperti
+  # IdxMarketState.closes_as_of: lebih baik satu tanggal bolong (pasangan
+  # return-nya di-skip) daripada nol masuk ke log() dan meracuni regresi.
   def ihsg_by_date
     @ihsg_by_date ||= begin
       scope = Candle.where(asset_type: "index", symbol: IdxMarketState::SYMBOL, timeframe: "1d")
       scope = scope.where("opened_at <= ?", @as_of) if @as_of
       scope.order(:opened_at).pluck(:opened_at, :close)
-           .each_with_object({}) { |(t, c), h| h[t.to_date] = c.to_f }
+           .each_with_object({}) do |(t, c), h|
+             close = c.to_f
+             h[t.to_date] = close unless close.zero?
+           end
     end
   end
 end

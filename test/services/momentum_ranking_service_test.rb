@@ -126,6 +126,79 @@ class MomentumRankingServiceTest < ActiveSupport::TestCase
     end
   end
 
+  # Satu close IHSG = 0 (data Yahoo rusak) TIDAK BOLEH menjatuhkan seluruh ranking.
+  # Propagasinya: log(0/ia) → -Infinity → m_bar -Infinity → denom NaN (dan `denom.zero?`
+  # tidak menangkap NaN) → beta/alpha/mom NaN. Filter MAX_MOMENTUM meloloskannya karena
+  # `NaN > cap` false, lalu sort_by { -momentum } meledak ArgumentError — di mode residual
+  # itu berarti MomentumSnapshotJob kehilangan tulisan bukti hari itu.
+  test "one zero IHSG close does not break residual ranking" do
+    n    = 75
+    base = Time.utc(2026, 1, 1)
+    r    = ->(i) { 0.002 + 0.004 * Math.sin(i) }
+    cum  = ->(i, extra) { (0...i).sum { |k| r.(k) + extra } }
+    n.times do |i|
+      close = i == 40 ? 0.0 : 1000 * Math.exp(cum.(i, 0))   # satu hari rusak
+      Candle.create!(symbol: IdxMarketState::SYMBOL, timeframe: "1d", asset_type: "index",
+                     open: 1000, high: 1000, low: 1000, close: close,
+                     volume: 0, opened_at: base + i.days)
+    end
+    series("BETA.JK", closes: (0...n).map { |i| 100.0 * Math.exp(2 * cum.(i, 0)) })
+    series("IDIO.JK", closes: (0...n).map { |i| 100.0 * Math.exp(cum.(i, 0.001)) })
+
+    o = { lookback: 60, skip: 5, top_n: 5 }
+    with_regime(blocked: false) do
+      res = nil
+      assert_nothing_raised do
+        res = MomentumRankingService.new(symbols: %w[BETA.JK IDIO.JK], residual: true, **o).call
+      end
+      # Bukan cuma "tidak meledak" — hasilnya harus tetap benar: hari rusak dibuang,
+      # sisa jendela tetap cukup untuk regresi, dan urutannya tak berubah.
+      assert_equal "IDIO.JK", res.first[:symbol], "residual: excess return sendiri yang menang"
+      assert res.all? { |x| x[:momentum].finite? }, "momentum NaN/Inf tak boleh lolos ke hasil"
+      assert_in_delta 0.0, res.find { |x| x[:symbol] == "BETA.JK" }[:momentum], 0.01,
+                      "saham yang cuma ikut indeks → residual ~0 walau ada satu hari rusak"
+    end
+  end
+
+  # Guard `pairs.length < 30`: jendela terlalu pendek → jangan reka regresi.
+  # Tanpa test, guard ini bisa dilewati refactor tanpa ada yang tahu (dan itulah
+  # cara `ib.zero?` yang hilang lolos dari review).
+  test "residual momentum skips symbol when window has too few return pairs" do
+    n    = 30
+    base = Time.utc(2026, 1, 1)
+    n.times do |i|
+      Candle.create!(symbol: IdxMarketState::SYMBOL, timeframe: "1d", asset_type: "index",
+                     open: 1000, high: 1000, low: 1000, close: 1000 + i, volume: 0,
+                     opened_at: base + i.days)
+    end
+    series("OK.JK", closes: (0...n).map { |i| 100.0 + i })
+
+    o = { lookback: 20, skip: 2, top_n: 5 }   # jendela = 21 bar → 20 pasang < 30
+    with_regime(blocked: false) do
+      assert_equal 1, MomentumRankingService.new(symbols: %w[OK.JK], **o).call.size,
+                   "mode mentah harus tetap lolos — pembanding bahwa yang membuang adalah guard residual"
+      assert_empty MomentumRankingService.new(symbols: %w[OK.JK], residual: true, **o).call
+    end
+  end
+
+  # Guard `denom.zero?`: indeks tak bergerak → varians nol → beta tak terdefinisi.
+  test "residual momentum skips symbol when index does not move (beta undefined)" do
+    n    = 75
+    base = Time.utc(2026, 1, 1)
+    n.times do |i|
+      Candle.create!(symbol: IdxMarketState::SYMBOL, timeframe: "1d", asset_type: "index",
+                     open: 1000, high: 1000, low: 1000, close: 1000, volume: 0,
+                     opened_at: base + i.days)
+    end
+    series("OK.JK", closes: (0...n).map { |i| 100.0 * Math.exp(0.001 * i) })
+
+    o = { lookback: 60, skip: 5, top_n: 5 }   # 55 pasang (lewat guard panjang), tapi denom = 0
+    with_regime(blocked: false) do
+      assert_equal 1, MomentumRankingService.new(symbols: %w[OK.JK], **o).call.size
+      assert_empty MomentumRankingService.new(symbols: %w[OK.JK], residual: true, **o).call
+    end
+  end
+
   test "skips symbols with insufficient history" do
     series("SHORT.JK", closes: (1..5).map { |i| 100.0 + i })   # < lookback+skip
     with_regime(blocked: false) do
