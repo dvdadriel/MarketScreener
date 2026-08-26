@@ -99,6 +99,30 @@ class SignalConfluenceService
     }
   end
 
+  # Detail indikator TANPA gate apa pun (skor, checks, level ATR) — dipakai
+  # RankReportJob untuk menampilkan kartu pick momentum dalam format alert lama.
+  # evaluate() tetap SATU-SATUNYA jalur yang boleh MEMICU sinyal; ini cuma tampilan,
+  # jadi tak ada ambang confluence/score/regime di sini.
+  def detail(side = "BUY")
+    return nil unless @indicators[:primary]&.any?
+
+    checks = run_checks
+    return nil if checks.empty?
+
+    total = checks.sum { |c| c[:weight] || 1.0 }
+    aligned = checks.select { |c| c[:direction] == (side == "BUY" ? :bullish : :bearish) }
+
+    {
+      score: total.zero? ? nil : (aligned.sum { |c| c[:weight] || 1.0 } / total).round(4),
+      metadata: {
+        trend:      determine_trend,
+        confluence: "#{aligned.size}/#{checks.size}",
+        checks:     checks.map { |c| { name: c[:name], dir: c[:direction].to_s, tf: c[:tf] } },
+        atr_pct:    primary_indicator&.atr_pct&.round(2)
+      }.merge(compute_levels(side)).deep_stringify_keys
+    }
+  end
+
   # ATR-based stop loss & take profit (with percentage fallback).
   # SL = 1.5x ATR away, TP = 3x ATR away (R:R 1:2)
   def compute_levels(side)

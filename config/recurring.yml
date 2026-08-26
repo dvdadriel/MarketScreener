@@ -65,6 +65,13 @@ momentum_snapshot:
   queue: default
   description: "Rekam regime + top-10 momentum harian (forward tracking)"
 
+rank_report:
+  class: RankReportJob
+  schedule: "15 10 * * 1-5"           # 10:15 UTC = 17:15 WIB, setelah momentum_snapshot (10:00)
+  args: [ "extended" ]
+  queue: default
+  description: "Laporan momentum harian + kartu BUY untuk pick baru (kirim hanya kalau top-10 berubah)"
+
 telegram_poller:
   class: TelegramPollerJob
   schedule: "* * * * *"               # tiap menit — poll perintah bot (no-op tanpa admin chat id)

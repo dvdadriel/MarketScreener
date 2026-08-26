@@ -22,6 +22,15 @@ class TelegramNotifier
     @asset_type = asset_type
   end
 
+  # Kirim teks bebas (mis. laporan /rank terjadwal). Best-effort, no-op tanpa config.
+  def send_text(text)
+    return unless configured?
+
+    post_message(text)
+  rescue => e
+    Rails.logger.error("[TelegramNotifier:#{@asset_type}] #{e.class}: #{e.message}")
+  end
+
   def send_signal(signal)
     return unless configured?
 
