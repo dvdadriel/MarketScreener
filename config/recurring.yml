@@ -96,6 +96,12 @@ daily_summary:
   queue: default
   description: "Send daily Telegram digest: signals, P&L, win rate"
 
+evidence_backup:
+  class: EvidenceBackupJob
+  schedule: "45 11 * * *"              # 11:45 UTC = 18:45 WIB, setelah momentum_snapshot
+  queue: default
+  description: "Backup tabel bukti forward-tracking (momentum_snapshots, paper_trades, trading_signals)"
+
 candle_prune:
   class: CandlePruneJob
   schedule: "15 3 * * *"              # daily 03:15 UTC — keep tables bounded

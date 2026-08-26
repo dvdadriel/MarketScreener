@@ -27,6 +27,7 @@ yarn-error.log
 *.swo
 .DS_Store
 /storage/*.sqlite3
+/storage/db_backups/
 
 # Ignore key files for decrypting credentials and more.
 /config/*.key
