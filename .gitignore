@@ -50,3 +50,7 @@ yarn-error.log
 
 /app/assets/builds/*
 !/app/assets/builds/.keep
+
+# Cadangan credentials — jangan pernah ter-commit
+*.bak
+*.bak-*
