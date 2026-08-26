@@ -14,7 +14,7 @@ class MomentumBacktestService
                  lookback: MomentumRankingService::LOOKBACK, skip: MomentumRankingService::SKIP,
                  cost_pct: 0.4, rebalance_days: REBALANCE_DAYS,
                  max_momentum: MomentumRankingService::MAX_MOMENTUM, min_price: MomentumRankingService::MIN_PRICE,
-                 max_extension: nil)
+                 max_extension: nil, regime_confirm_days: 0, buffer_n: nil, residual: false)
     @symbols   = Array(symbols)
     @days      = days.to_i
     @offset    = offset_days.to_i
@@ -26,11 +26,19 @@ class MomentumBacktestService
     @max_momentum = max_momentum
     @max_extension = max_extension
     @min_price    = min_price
+    @regime_confirm_days = regime_confirm_days.to_i
+    # Buffer zone: beli hanya top_n, tapi TAHAN posisi lama selama masih di top buffer_n.
+    # Tujuannya memangkas turnover (fee 0.4%/leg) tanpa mengubah sinyalnya. nil/<=top_n = mati.
+    @buffer_n = buffer_n.to_i
+    @buffer_n = 0 if @buffer_n <= @top_n
+    @residual = residual   # ranking pakai momentum residual (beta-adjusted) vs return mentah
   end
 
   def call
+    Thread.current[:regime_confirm_days] = @regime_confirm_days
     ensure_data
     prices = load_prices                       # symbol => [Candle,...] asc
+    check_coverage!(prices)
     dates  = rebalance_dates
     return empty_report if dates.length < 2
 
@@ -54,10 +62,7 @@ class MomentumBacktestService
 
       # 2) ranking ulang as-of tanggal ini
       Thread.current[:backtest_as_of] = d
-      target = MomentumRankingService.new(as_of: d, symbols: @symbols,
-                                          lookback: @lookback, skip: @skip, top_n: @top_n,
-                                          max_momentum: @max_momentum, min_price: @min_price,
-                                          max_extension: @max_extension).call.map { |r| r[:symbol] }
+      target = rank_at(d, holdings)
 
       # 3) biaya turnover: tiap posisi masuk/keluar kena cost_pct pada bobot 1/N
       changed = (holdings - target).size + (target - holdings).size
@@ -77,9 +82,48 @@ class MomentumBacktestService
     build_report(equity, maxdd, period_rets, dates.length, cash_periods, benchmark_return(dates))
   ensure
     Thread.current[:backtest_as_of] = nil
+    Thread.current[:regime_confirm_days] = nil
   end
 
   private
+
+  # Simbol yang candle-nya kurang dari lookback+skip dibuang DIAM-DIAM oleh ranking
+  # service. Kalau itu terjadi massal (mis. `ensure_data` masih mengunduh saat sweep
+  # jalan, 2026-08-10), backtest tetap keluar angka — angka dari universe yang salah.
+  # Gagal keras daripada menghasilkan kesimpulan palsu. Ambang 10%: kondisi normal
+  # ~1% (IPO baru memang belum punya histori).
+  MAX_MISSING_SHARE = 0.10
+
+  def check_coverage!(prices)
+    return if prices.empty?
+
+    need    = @lookback + @skip + 1
+    missing = prices.count { |_, c| c.nil? || c.length < need }
+    share   = missing.to_f / prices.size
+    return if share <= MAX_MISSING_SHARE
+
+    raise "Data tak lengkap: #{missing}/#{prices.size} simbol (#{(share * 100).round(1)}%) punya < #{need} candle 1d. " \
+          "Jalankan ulang setelah fetch selesai — hasil dari universe pincang tidak sahih."
+  end
+
+  # Portofolio target tanggal d. Tanpa buffer: top_n murni. Dengan buffer: pertahankan
+  # holding yang masih di top buffer_n (urut ranking), sisanya diisi dari top_n.
+  def rank_at(date, holdings)
+    n = @buffer_n.positive? ? @buffer_n : @top_n
+    ranked = MomentumRankingService.new(
+      as_of: date, symbols: @symbols, lookback: @lookback, skip: @skip, top_n: n,
+      max_momentum: @max_momentum, min_price: @min_price, max_extension: @max_extension,
+      # Feasibility posisi dihitung portfolio/top_n di ranking service. Minta n nama
+      # tapi ukuran posisi tetap 1/top_n → skalakan portofolio supaya syaratnya identik
+      # dengan jalur tanpa buffer (kalau tidak, buffer diam-diam melonggarkan filter).
+      portfolio_idr: MomentumRankingService::PORTFOLIO_IDR * n / @top_n.to_f,
+      residual: @residual
+    ).call.map { |r| r[:symbol] }
+    return ranked.first(@top_n) if @buffer_n.zero?
+
+    keep = (ranked & holdings).first(@top_n)
+    keep + (ranked.first(@top_n) - keep).first(@top_n - keep.size)
+  end
 
   def build_report(equity, maxdd, period_rets, n_periods, cash_periods, benchmark)
     mean = period_rets.empty? ? 0.0 : period_rets.sum / period_rets.size

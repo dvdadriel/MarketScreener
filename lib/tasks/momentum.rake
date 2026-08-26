@@ -36,15 +36,32 @@ namespace :momentum do
     end
   end
 
-  desc "Walk-forward backtest momentum. Contoh: bin/rails 'momentum:backtest[365,extended,0]'"
-  task :backtest, [ :days, :universe, :offset ] => :environment do |_t, args|
+  desc "Walk-forward backtest momentum. buffer = tahan holding sampai keluar top-buffer (0=mati). Contoh: bin/rails 'momentum:backtest[365,extended,0,15]'"
+  task :backtest, [ :days, :universe, :offset, :buffer ] => :environment do |_t, args|
     days   = (args[:days] || 365).to_i
     offset = (args[:offset] || 0).to_i
+    buffer = args[:buffer].to_i
     syms   = (UNIVERSES[args[:universe]] || UNIVERSES["lq45"]).call
 
-    puts "Momentum backtest: #{syms.size} simbol · #{days}d · offset #{offset}d · rebalance bulanan · fee 0.4%"
-    r = MomentumBacktestService.new(symbols: syms, days: days, offset_days: offset, top_n: 10, cost_pct: 0.4).call
+    puts "Momentum backtest: #{syms.size} simbol · #{days}d · offset #{offset}d · rebalance bulanan · fee 0.4% · buffer #{buffer.positive? ? buffer : 'off'}"
+    r = MomentumBacktestService.new(symbols: syms, days: days, offset_days: offset, top_n: 10, cost_pct: 0.4, buffer_n: buffer).call
     printf("ret=%+.2f%%  maxDD=-%.2f%%  Sharpe=%s  win=%.0f%%  periode=%d  cash=%d\n",
       r[:total_return], r[:max_drawdown], r[:sharpe] || "-", r[:win_rate], r[:periods], r[:cash_periods])
+  end
+
+  desc "Bandingkan buffer zone (0/12/15/20) di beberapa window. Contoh: bin/rails 'momentum:buffer_sweep[extended]'"
+  task :buffer_sweep, [ :universe ] => :environment do |_t, args|
+    syms = (UNIVERSES[args[:universe]] || UNIVERSES["extended"]).call
+    puts "Buffer sweep · #{syms.size} simbol · top-10 · fee 0.4%\n\n"
+    printf("%-7s %-7s %9s %9s %8s %8s\n", "window", "buffer", "ret", "alpha", "maxDD", "Sharpe")
+    [ 365, 730, 1095 ].each do |days|
+      [ 0, 12, 15, 20 ].each do |buf|
+        r = MomentumBacktestService.new(symbols: syms, days: days, offset_days: 0, top_n: 10,
+                                        cost_pct: 0.4, buffer_n: buf).call
+        printf("%-7s %-7s %+8.2f%% %+8.2f%% %7.2f%% %8s\n", "#{days}d", buf.zero? ? "off" : buf,
+               r[:total_return], r[:alpha] || 0.0, r[:max_drawdown], r[:sharpe] || "-")
+      end
+      puts
+    end
   end
 end
