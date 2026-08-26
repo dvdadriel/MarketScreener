@@ -23,6 +23,11 @@ class MomentumRankingServiceTest < ActiveSupport::TestCase
   # lookback 10 + skip 2 => butuh 13 candle. Harga cukup tinggi supaya turnover > Rp 1M.
   def opts = { lookback: 10, skip: 2, top_n: 5 }
 
+  # Candle seperti yang dilihat #score — urutan & scope sama.
+  def candles_for(symbol)
+    Candle.for_asset("stock").for_symbol(symbol).for_timeframe("1d").ordered.to_a
+  end
+
   # Fixture regresi residual, dipakai beberapa test:
   #   indeks   — return BERVARIASI; kalau konstan beta menyerap seluruh drift saham
   #              dan residual selalu nol (konstruksi degenerate).
@@ -168,6 +173,62 @@ class MomentumRankingServiceTest < ActiveSupport::TestCase
       assert_equal "IDIO.JK", res.first[:symbol]
       assert res.all? { |x| x[:momentum].finite? }, "momentum NaN/Inf tak boleh lolos ke hasil"
     end
+  end
+
+  # ---------------------------------------------------------------------------
+  # Tiga lapis pertahanan close indeks rusak SALING MENUTUPI: test end-to-end di
+  # atas hanya gagal kalau ketiganya dicabut sekaligus, jadi refactor yang
+  # menghapus SATU lapis tetap lolos. Tiga test di bawah memaku tiap lapis
+  # sendiri-sendiri, masing-masing lewat seam paling dangkal yang cukup untuk
+  # melewati lapis di hulunya.
+  # ---------------------------------------------------------------------------
+
+  # LAPIS 1 — ihsg_by_date membuang close tak-positif di sumber.
+  test "layer 1: ihsg_by_date drops non-positive index closes at the source" do
+    base  = Time.utc(2026, 1, 1)
+    [ 1000.0, 0.0, -1000.0, 1010.0 ].each_with_index do |px, i|
+      Candle.create!(symbol: IdxMarketState::SYMBOL, timeframe: "1d", asset_type: "index",
+                     open: 1000, high: 1000, low: 1000, close: px, volume: 0,
+                     opened_at: base + i.days)
+    end
+
+    mkt = MomentumRankingService.new(symbols: []).send(:ihsg_by_date)
+
+    assert_equal [ base.to_date, (base + 3.days).to_date ], mkt.keys.sort
+    assert mkt.values.all?(&:positive?), "hanya close positif boleh masuk peta indeks"
+  end
+
+  # LAPIS 2 — filter pasangan return (ia/ib/pa/pb <= 0). Lapis 1 dilewati dengan
+  # men-stub ihsg_by_date: nolnya disisipkan ULANG setelah penyaringan sumber,
+  # persis seperti kalau lapis 1 hilang.
+  test "layer 2: return-pair filter survives a zero close that bypasses ihsg_by_date" do
+    residual_fixture
+    o   = { lookback: 60, skip: 5, top_n: 5 }
+    svc = MomentumRankingService.new(symbols: %w[IDIO.JK], residual: true, **o)
+
+    mkt = svc.send(:ihsg_by_date).dup
+    mkt[mkt.keys[40]] = 0.0
+    svc.define_singleton_method(:ihsg_by_date) { mkt }
+
+    mom = svc.send(:residual_momentum, candles_for("IDIO.JK"))
+    refute_nil mom, "58 pasang tersisa masih cukup untuk regresi"
+    assert mom.finite?, "close nol harus dibuang di filter pasangan, bukan jadi NaN"
+  end
+
+  # LAPIS 3 — jaring terakhir `mom.finite?`. Lapis 1 & 2 dilewati dengan nilai
+  # indeks Infinity: positive? true (lolos lapis 1) dan <= 0 false (lolos lapis 2),
+  # tapi log(finite/Infinity) = -Infinity tetap meracuni regresi jadi NaN.
+  test "layer 3: finite? net catches NaN that slips past both earlier layers" do
+    residual_fixture
+    o   = { lookback: 60, skip: 5, top_n: 5 }
+    svc = MomentumRankingService.new(symbols: %w[IDIO.JK], residual: true, **o)
+
+    mkt = svc.send(:ihsg_by_date).dup
+    mkt[mkt.keys[40]] = Float::INFINITY
+    svc.define_singleton_method(:ihsg_by_date) { mkt }
+
+    assert_nil svc.send(:residual_momentum, candles_for("IDIO.JK")),
+               "nilai non-finite harus membuang SIMBOLNYA, bukan lolos ke sort_by"
   end
 
   # Guard `pairs.length < 30`: jendela terlalu pendek → jangan reka regresi.
