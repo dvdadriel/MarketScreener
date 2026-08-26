@@ -6,10 +6,29 @@ class EvidenceBackupServiceTest < ActiveSupport::TestCase
   # worker paralel & jangan menulis ke lokasi backup nyata saat test.
   def setup
     @dir = Rails.root.join("tmp", "test_backups_#{Process.pid}_#{object_id}")
+    # Bin palsu untuk mem-stub pg_dump/gzip. DI LUAR @dir supaya tidak tercampur
+    # saat kita meng-assert isi direktori backup.
+    @bin = Rails.root.join("tmp", "test_backups_bin_#{Process.pid}_#{object_id}")
   end
 
   def teardown
     FileUtils.rm_rf(@dir)
+    FileUtils.rm_rf(@bin)
+  end
+
+  # Taruh executable palsu di depan PATH (mis. gzip yang gagal setelah membuat
+  # output). Bentuk shell script, bukan stub Ruby: yang diuji justru batas
+  # proses — exit status & sisa file di disk.
+  def with_fake_bin(name, script)
+    FileUtils.mkdir_p(@bin)
+    path = @bin.join(name)
+    File.write(path, script)
+    File.chmod(0o755, path)
+    orig = ENV["PATH"]
+    ENV["PATH"] = "#{@bin}:#{orig}"
+    yield
+  ensure
+    ENV["PATH"] = orig
   end
 
   test "dumps all evidence tables and reports success" do
@@ -44,6 +63,27 @@ class EvidenceBackupServiceTest < ActiveSupport::TestCase
     assert_empty r.ok_tables
     assert_empty Dir.glob(@dir.join("*.sql.gz")),
                  "dump gagal tidak boleh meninggalkan arsip (mis. gzip kosong 20 byte)"
+  end
+
+  # gzip yang gagal SETELAH membuat outputnya meninggalkan <tabel>-<tgl>.sql.part.gz.
+  # Itu gzip yang valid & mudah disalahsangka sebagai backup nyata saat audit, dan
+  # rotate! meng-glob "*.sql.gz" yang TIDAK cocok dengan ".sql.part.gz"
+  # (File.fnmatch("*.sql.gz", "x.sql.part.gz") == false) — jadi sampahnya menumpuk
+  # SELAMANYA, satu per tabel gagal per hari.
+  test "failed gzip leaves no partial archive behind" do
+    script = <<~SH
+      #!/bin/sh
+      touch "$2.gz"    # gzip sempat membuat output...
+      exit 1           # ...lalu gagal
+    SH
+
+    r = with_fake_bin("gzip", script) { EvidenceBackupService.new(dir: @dir).call }
+
+    refute r.success?, "gzip gagal harus dilaporkan GAGAL"
+    assert_equal EvidenceBackupService::TABLES.sort, r.failed_tables.sort
+    assert_empty Dir.glob(@dir.join("*.part*")),
+                 "sisa .part/.part.gz tidak boleh ditinggal — rotate! tak akan pernah menyapunya"
+    assert_empty Dir.glob(@dir.join("*.sql.gz")), "tak boleh ada arsip dari dump gagal"
   end
 
   test "rotates dumps older than retention window" do

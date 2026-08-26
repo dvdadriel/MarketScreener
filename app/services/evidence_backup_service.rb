@@ -58,7 +58,13 @@ class EvidenceBackupService
     false
   ensure
     # Sisa dump gagal/parsial jangan ditinggal: menyesatkan saat audit bukti.
-    File.delete(raw) if raw && File.exist?(raw)
+    # KEDUA jejaknya harus disapu — .part DAN .part.gz. gzip yang gagal setelah
+    # membuat outputnya (atau File.rename yang meledak) meninggalkan .part.gz:
+    # gzip valid yang mudah disalahsangka backup nyata, dan rotate! meng-glob
+    # "*.sql.gz" yang TIDAK cocok dengan ".sql.part.gz" — jadi tanpa ini sampahnya
+    # menumpuk selamanya. Setelah rename sukses tak ada satupun dari keduanya
+    # tersisa, jadi pembersihan tanpa syarat ini aman.
+    [ raw, "#{raw}.gz" ].each { |f| File.delete(f) if f && File.exist?(f) } if raw
   end
 
   def db_config = ActiveRecord::Base.connection_db_config.configuration_hash
