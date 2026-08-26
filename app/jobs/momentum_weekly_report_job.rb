@@ -7,7 +7,6 @@ class MomentumWeeklyReportJob < ApplicationJob
   # Referensi backtest tervalidasi (LQ45, 4 window 2022-2026, fee+regime):
   # alpha tahunan +1.4%..+21.2%, maxDD 2-7%. Dipakai sebagai garis ekspektasi.
   BACKTEST_ALPHA_NOTE = "+1,4%..+21,2%/thn (LQ45 4 window)".freeze
-  BACKTEST_MAX_DD     = 7.5   # % — batas wajar; forward melebihi ini = warning
 
   def perform
     r = MomentumPaperTracker.new.call
@@ -37,13 +36,30 @@ class MomentumWeeklyReportJob < ApplicationJob
     lines << "  Regime: `#{r[:regime_today]}` · Holdings: #{r[:holdings].any? ? r[:holdings].map { |s| s.sub('.JK', '') }.join(', ') : 'CASH'}"
     lines << ""
     lines << "*Vs backtest:* ekspektasi alpha #{BACKTEST_ALPHA_NOTE}"
-    if r[:max_drawdown] > BACKTEST_MAX_DD * 1.5
-      lines << "⚠️ maxDD forward (-#{r[:max_drawdown]}%) > 1,5× backtest — cek kriteria gate!"
-    end
+    lines.concat(gate_progress_lines)
     lines << ""
     lines << negative_control_line
     lines.join("\n")
   end
+
+  # Plan H6: verdict otomatis kriteria promosi §1.3 — tak menunggu penilaian manual.
+  def gate_progress_lines
+    v = MomentumGateEvaluator.new.call
+    lines = [ "", "*🚦 Gate promosi:* minggu #{v.weeks_tracked}/#{v.weeks_required}" ]
+
+    if v.evaluated
+      lines << "  #{check(v.criteria[:duration])} Durasi ≥ #{v.weeks_required} minggu"
+      lines << "  #{check(v.criteria[:alpha])} Alpha kumulatif > 0 (#{fmt(v.alpha_cumulative)})"
+      lines << "  #{check(v.criteria[:drawdown])} maxDD ≤ #{v.max_dd_ceiling}% (#{v.max_drawdown}%)"
+      lines << "  #{check(v.criteria[:regime])} Perilaku regime konsisten"
+      lines << (v.promote ? "✅ *SEMUA KRITERIA TERPENUHI — siap dipromosikan*" : "⏸ Belum semua kriteria terpenuhi — lanjut observasi")
+    else
+      lines << "  _#{v.weeks_required - v.weeks_tracked} minggu lagi sebelum dinilai (kriteria lain baru bermakna setelah durasi cukup)_"
+    end
+    lines
+  end
+
+  def check(ok) = ok ? "✅" : "❌"
 
   # Kontrol negatif: confluence (dibungkam, terbukti rugi di backtest). Kalau ia
   # tiba-tiba profit forward, metodologi kita yang salah — bukan kabar baik.
