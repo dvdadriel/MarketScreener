@@ -2,6 +2,9 @@ import type { PaperStatsData } from "../types";
 
 export function PaperTradeStatsView({ data }: { data: PaperStatsData | null }) {
   if (data === null) return <p>Gagal memuat paper trade stats.</p>;
+  if (data.by_strategy.length === 0) {
+    return <p>Belum ada breakdown strategi.</p>;
+  }
 
   return (
     <div>
