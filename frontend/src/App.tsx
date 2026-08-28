@@ -40,55 +40,60 @@ export function App() {
     async function load() {
       const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-      const [signalsRes, closesRes, swingRes, momentumRes, statsRes, tradesRes] =
-        await Promise.all([
-          supabase
-            .from("signals")
-            .select("*")
-            .eq("asset_type", "stock")
-            .order("fired_at", { ascending: false })
-            .limit(50),
-          supabase
-            .from("latest_candle_closes")
-            .select("*")
-            .eq("asset_type", "stock")
-            .eq("timeframe", "1d"),
-          supabase
-            .from("signals")
-            .select("*")
-            .eq("strategy", "SWING_PICK")
-            .eq("asset_type", "stock")
-            .gte("fired_at", since24h)
-            .order("fired_at", { ascending: false })
-            .limit(10),
-          supabase.from("momentum_tracker_summaries").select("data").maybeSingle(),
-          supabase
-            .from("paper_trade_stats_summaries")
-            .select("data")
-            .eq("asset_type", "stock")
-            .maybeSingle(),
-          supabase
-            .from("paper_trades")
-            .select("*")
-            .eq("asset_type", "stock")
-            .eq("status", "open")
-            .order("entry_at", { ascending: false })
-            .limit(20),
-        ]);
+      try {
+        const [signalsRes, closesRes, swingRes, momentumRes, statsRes, tradesRes] =
+          await Promise.all([
+            supabase
+              .from("signals")
+              .select("*")
+              .eq("asset_type", "stock")
+              .order("fired_at", { ascending: false })
+              .limit(50),
+            supabase
+              .from("latest_candle_closes")
+              .select("*")
+              .eq("asset_type", "stock")
+              .eq("timeframe", "1d"),
+            supabase
+              .from("signals")
+              .select("*")
+              .eq("strategy", "SWING_PICK")
+              .eq("asset_type", "stock")
+              .gte("fired_at", since24h)
+              .order("fired_at", { ascending: false })
+              .limit(10),
+            supabase.from("momentum_tracker_summaries").select("data").maybeSingle(),
+            supabase
+              .from("paper_trade_stats_summaries")
+              .select("data")
+              .eq("asset_type", "stock")
+              .maybeSingle(),
+            supabase
+              .from("paper_trades")
+              .select("*")
+              .eq("asset_type", "stock")
+              .eq("status", "open")
+              .order("entry_at", { ascending: false })
+              .limit(20),
+          ]);
 
-      setState({
-        signals: signalsRes.error ? null : (signalsRes.data as Signal[]),
-        closes: closesRes.error ? null : (closesRes.data as LatestClose[]),
-        swingPicks: swingRes.error ? null : (swingRes.data as Signal[]),
-        momentum: momentumRes.error
-          ? null
-          : ((momentumRes.data?.data as MomentumSummaryData) ?? null),
-        paperStats: statsRes.error
-          ? null
-          : ((statsRes.data?.data as PaperStatsData) ?? null),
-        openTrades: tradesRes.error ? null : (tradesRes.data as PaperTrade[]),
-      });
-      setLoading(false);
+        setState({
+          signals: signalsRes.error ? null : (signalsRes.data as Signal[]),
+          closes: closesRes.error ? null : (closesRes.data as LatestClose[]),
+          swingPicks: swingRes.error ? null : (swingRes.data as Signal[]),
+          momentum: momentumRes.error
+            ? null
+            : ((momentumRes.data?.data as MomentumSummaryData) ?? null),
+          paperStats: statsRes.error
+            ? null
+            : ((statsRes.data?.data as PaperStatsData) ?? null),
+          openTrades: tradesRes.error ? null : (tradesRes.data as PaperTrade[]),
+        });
+      } catch {
+        setState(EMPTY_STATE);
+      } finally {
+        setLoading(false);
+      }
     }
 
     load();
