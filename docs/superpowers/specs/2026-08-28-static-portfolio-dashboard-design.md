@@ -45,8 +45,8 @@ sudah ada, RLS SELECT-only):
 
 | Data dashboard | Tabel | Query |
 |---|---|---|
-| Trading signals terbaru | `trading_signals` | `asset_type=eq.stock&order=fired_at.desc&limit=50` |
-| Swing picks 24 jam | `trading_signals` | `strategy=eq.SWING_PICK&fired_at=gte.<24h ago>&order=...` |
+| Trading signals terbaru | `signals` (tabel asli; model Ruby-nya `TradingSignal`) | `asset_type=eq.stock&order=fired_at.desc&limit=50` |
+| Swing picks 24 jam | `signals` (tabel asli; model Ruby-nya `TradingSignal`) | `strategy=eq.SWING_PICK&fired_at=gte.<24h ago>&order=...` |
 | Open paper trades | `paper_trades` | `asset_type=eq.stock&status=eq.open&order=entry_at.desc&limit=20` |
 | Status market IDX | — | dihitung di JS dari jam WIB saat ini vs jadwal bursa (09:00–16:00 WIB, Senin–Jumat), tidak perlu ke DB |
 
@@ -77,7 +77,7 @@ Sebelum frontend dibuat:
 1. `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` di **semua** tabel `public`
    (default deny)
 2. Policy `SELECT`-only untuk role `anon`, hanya di tabel/view yang dipakai
-   dashboard: `trading_signals`, `paper_trades`, `latest_candle_closes`,
+   dashboard: `signals` (tabel asli; model Ruby-nya `TradingSignal`), `paper_trades`, `latest_candle_closes`,
    `momentum_tracker_summary`, `paper_trade_stats_summary`
 3. Tabel lain (termasuk tabel Solid Queue/Cache/Cable yang kini berbagi
    database yang sama — lihat Fase 1.3 plan) otomatis tetap tertutup karena
