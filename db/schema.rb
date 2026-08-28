@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_15_060000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_28_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -42,6 +42,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_15_060000) do
     t.datetime "updated_at", null: false
     t.index ["snapshot_date", "rank"], name: "index_momentum_snapshots_on_snapshot_date_and_rank", unique: true
     t.index ["snapshot_date"], name: "index_momentum_snapshots_on_snapshot_date"
+  end
+
+  create_table "momentum_tracker_summaries", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.jsonb "data", default: {}, null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "paper_trade_stats_summaries", force: :cascade do |t|
+    t.string "asset_type", null: false
+    t.datetime "created_at", null: false
+    t.jsonb "data", default: {}, null: false
+    t.datetime "updated_at", null: false
+    t.index ["asset_type"], name: "index_paper_trade_stats_summaries_on_asset_type", unique: true
   end
 
   create_table "paper_trades", force: :cascade do |t|
