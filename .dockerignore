@@ -1,0 +1,12 @@
+.git/
+.gitignore
+.github/
+log/*
+tmp/*
+!log/.keep
+!tmp/.keep
+config/master.key
+.env*
+.dockerignore
+Dockerfile
+docs/

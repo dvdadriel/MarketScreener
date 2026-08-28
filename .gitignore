@@ -54,3 +54,4 @@ yarn-error.log
 # Cadangan credentials — jangan pernah ter-commit
 *.bak
 *.bak-*
+supabase_config.txt
