@@ -1,0 +1,2 @@
+class PaperTradeStatsSummary < ApplicationRecord
+end
