@@ -297,6 +297,18 @@ pengalaman orang yang mengklik tautan.
 
 Kalau tautan ini akan Anda tunjukkan ke recruiter, pertimbangkan Fase 6.
 
+### 3.5 Frontend statis (React) di Vercel
+
+Dashboard read-only sekarang ada di `frontend/` (lihat
+docs/superpowers/specs/2026-08-28-static-portfolio-dashboard-design.md).
+Deploy terpisah dari Rails:
+
+1. Vercel → New Project → import repo, **Root Directory** = `frontend`
+2. Framework preset: Vite (auto-detected dari `vercel.json`)
+3. Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+   (anon key publik Supabase — aman diexpose, itu tujuannya, dibatasi RLS)
+4. Deploy — Vercel kasih URL `*.vercel.app`, tambahkan custom domain kalau mau
+
 ---
 
 ## Fase 4 — Dead man's switch
