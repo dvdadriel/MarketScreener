@@ -6,20 +6,25 @@
 > tepat. Cukup pindahkan ke `docs/deploy-plan.md` kalau ingin nama file yang
 > lebih pendek; tidak perlu pindah repo.
 
-**Arsitektur yang dipilih:**
+**Arsitektur yang dipilih (final):**
 
 ```
 Supabase (Postgres)  ←──  GitHub Actions (job harian, gratis, repo publik)
-        ↑                          │
-        │                          └──→ healthchecks.io (dead man's switch)
+        ↑
+        │  REST API (PostgREST, RLS read-only)
         │
-Fly.io (web dashboard)  ←── idx.domain-anda.com
+React statis (Vercel, gratis, tanpa kartu)  ←── idx.domain-anda.com
 ```
 
-**Prinsipnya:** job harian tidak boleh bergantung pada web service hidup atau tidak.
-GitHub Actions menjalankan Ruby-nya sendiri di runner, jadi dashboard boleh tidur di
-tier gratis tanpa mengganggu riwayat forward tracking — dan riwayat itu yang jadi
-nilai project ini.
+**Prinsipnya:** dashboard portofolio ini murni read-only, jadi tidak butuh server
+Ruby yang hidup 24 jam sama sekali. Job harian (GitHub Actions) menulis ke Supabase;
+frontend statis (Fase 3.5) baca langsung dari situ lewat REST API Supabase. Rails
+cuma dipakai sebagai mesin batch job, tidak pernah di-deploy sebagai web service.
+
+> **Fase 3 (Koyeb) di bawah ini sudah tidak diperlukan** untuk dashboard portofolio
+> — dibiarkan di dokumen ini sebagai referensi kalau suatu saat butuh fitur
+> interaktif (search live, upload ticker, dll) yang memang butuh Rails hidup.
+> Jalur yang benar-benar dipakai sekarang ada di **Fase 3.5**.
 
 ---
 
@@ -230,7 +235,12 @@ Settings → Secrets and variables → Actions:
 
 ---
 
-## Fase 3 — Koyeb (web dashboard)
+## Fase 3 — Koyeb (web dashboard, opsional/tidak dipakai sekarang)
+
+> **Skip fase ini** untuk dashboard portofolio — sudah digantikan Fase 3.5
+> (frontend statis di Vercel), yang tidak butuh server Ruby hidup sama sekali.
+> Bagian di bawah ini relevan lagi kalau nanti Anda benar-benar butuh fitur
+> interaktif (search simbol bebas live, upload ticker lewat web, dll).
 
 > Render dan Fly.io sama-sama mewajibkan kartu kredit untuk verifikasi akun.
 > Koyeb (per pengetahuan saya) masih menawarkan free tier tanpa kartu — **cek
