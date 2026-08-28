@@ -11,21 +11,23 @@ test:
   <<: *default
   database: crypto_screener_test
 
-# Multi-database: Solid Cache/Queue/Cable pakai koneksi terpisah (lihat
-# cache.yml/queue.yml/cable.yml + production.rb solid_queue.connects_to).
-# Skema tiap DB dimuat dari db/{cache,queue,cable}_schema.rb saat db:prepare.
+# Supabase free tier = satu database. Semua koneksi logis (primary/cache/
+# queue/cable) diarahkan ke DATABASE_URL yang sama (lihat
+# production.rb solid_queue/cache/cable.connects_to — Opsi A di
+# docs/idx-screener-deploy-plan.md Fase 1.3).
+#
+# prepared_statements/advisory_locks: false wajib di belakang pooler Supabase
+# (port 6543, transaction mode). Migrasi harus lewat DATABASE_URL direct
+# (port 5432) — pooler tidak mendukung DDL dengan advisory lock.
 production:
   primary: &primary_production
     <<: *default
-    database: crypto_screener_production
-    username: crypto_screener
-    password: <%= ENV["CRYPTO_SCREENER_DATABASE_PASSWORD"] %>
+    url: <%= ENV["DATABASE_URL"] %>
+    prepared_statements: false
+    advisory_locks: false
   cache:
     <<: *primary_production
-    database: crypto_screener_production_cache
   queue:
     <<: *primary_production
-    database: crypto_screener_production_queue
   cable:
     <<: *primary_production
-    database: crypto_screener_production_cable

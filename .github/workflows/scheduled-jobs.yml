@@ -1,0 +1,108 @@
+name: Scheduled jobs
+
+# Pengganti config/recurring.yml (Solid Queue) — supaya job tidak bergantung
+# pada Puma/Render tetap bangun. Tiap cron di bawah = satu jadwal yang dulu
+# ada di recurring.yml; step dipilih lewat `github.event.schedule`.
+#
+# telegram_poller (tiap 1 menit) SENGAJA tidak dipindah ke sini — GitHub
+# Actions tidak menjamin interval di bawah 5 menit dan sering delay saat
+# runner sibuk, jadi bot command akan terasa lambat/hilang. Job itu tetap di
+# Solid Queue (jalan dalam Puma) sampai diganti ke webhook Telegram.
+
+on:
+  schedule:
+    - cron: '0 22 * * *'    # universe_refresh   — 05:00 WIB
+    - cron: '30 9 * * 1-5'  # scanner            — 16:30 WIB
+    - cron: '0 10 * * 1-5'  # snapshot           — 17:00 WIB
+    - cron: '15 10 * * 1-5' # rank_report        — 17:15 WIB
+    - cron: '0 10 * * *'    # daily_summary      — 17:00 WIB
+    - cron: '45 11 * * *'   # evidence_backup    — 18:45 WIB
+    - cron: '15 3 * * *'    # candle_prune       — 10:15 WIB
+    - cron: '30 10 * * 5'   # weekly_report      — Jumat 17:30 WIB
+    - cron: '*/30 * * * *'  # poll (stock_poller)
+    - cron: '*/5 * * * *'   # paper_trade_update + health_monitor
+    - cron: '*/15 * * * *'  # failed_job_alert
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Rake task idx:<task> untuk dijalankan manual'
+        required: true
+        default: 'universe_refresh'
+
+concurrency:
+  group: idx-scheduled-${{ github.event.schedule || inputs.task }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RAILS_ENV: production
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      RAILS_MASTER_KEY: ${{ secrets.RAILS_MASTER_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: universe_refresh
+        if: github.event.schedule == '0 22 * * *' || inputs.task == 'universe_refresh'
+        run: bundle exec rake idx:universe_refresh
+
+      - name: scanner
+        if: github.event.schedule == '30 9 * * 1-5' || inputs.task == 'scanner'
+        run: bundle exec rake idx:scanner
+
+      - name: snapshot
+        if: github.event.schedule == '0 10 * * 1-5' || inputs.task == 'snapshot'
+        run: bundle exec rake idx:snapshot
+
+      - name: rank_report
+        if: github.event.schedule == '15 10 * * 1-5' || inputs.task == 'rank_report'
+        run: bundle exec rake idx:rank_report
+
+      - name: daily_summary
+        if: github.event.schedule == '0 10 * * *' || inputs.task == 'daily_summary'
+        run: bundle exec rake idx:daily_summary
+
+      - name: evidence_backup
+        if: github.event.schedule == '45 11 * * *' || inputs.task == 'evidence_backup'
+        run: bundle exec rake idx:evidence_backup
+
+      - name: candle_prune
+        if: github.event.schedule == '15 3 * * *' || inputs.task == 'candle_prune'
+        run: bundle exec rake idx:candle_prune
+
+      - name: weekly_report
+        if: github.event.schedule == '30 10 * * 5' || inputs.task == 'weekly_report'
+        run: bundle exec rake idx:weekly_report
+
+      - name: poll
+        if: github.event.schedule == '*/30 * * * *' || inputs.task == 'poll'
+        run: bundle exec rake idx:poll
+
+      - name: paper_trade_update
+        if: github.event.schedule == '*/5 * * * *' || inputs.task == 'paper_trade_update'
+        run: bundle exec rake idx:paper_trade_update
+
+      - name: health_monitor
+        if: github.event.schedule == '*/5 * * * *' || inputs.task == 'health_monitor'
+        run: bundle exec rake idx:health_monitor
+
+      - name: failed_job_alert
+        if: github.event.schedule == '*/15 * * * *' || inputs.task == 'failed_job_alert'
+        run: bundle exec rake idx:failed_job_alert
+
+      - name: Lapor sukses
+        if: success()
+        run: curl -fsS -m 10 --retry 3 "${{ secrets.HEALTHCHECK_URL }}"
+
+      - name: Lapor gagal
+        if: failure()
+        run: curl -fsS -m 10 --retry 3 "${{ secrets.HEALTHCHECK_URL }}/fail"

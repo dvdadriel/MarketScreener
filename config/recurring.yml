@@ -34,88 +34,30 @@
 #   queue: realtime
 # ─────────────────────────────────────────────────────────────────────────
 
-stock_poller:
-  class: StockPollerJob
-  schedule: "*/30 * * * *"            # every 30 min (raised from 15 since universe is large)
-  queue: scan
-  description: "Fetch IDX candles for full universe (skips if market closed)"
+# Semua jadwal IDX di bawah ini pindah ke GitHub Actions
+# (.github/workflows/scheduled-jobs.yml, task idx:* di lib/tasks/idx.rake) —
+# supaya tidak bergantung pada Puma/Render tetap bangun. Lihat
+# docs/idx-screener-deploy-plan.md Fase 2.
+#
+# stock_poller            → idx:poll                (*/30 * * * *)
+# idx_universe_refresh    → idx:universe_refresh     (0 22 * * *)
+# idx_scanner             → idx:scanner              (30 9 * * 1-5)
+# momentum_snapshot       → idx:snapshot             (0 10 * * 1-5)
+# rank_report             → idx:rank_report          (15 10 * * 1-5)
+# momentum_weekly_report  → idx:weekly_report         (30 10 * * 5)
+# paper_trade_updater     → idx:paper_trade_update   (*/5 * * * *)
+# daily_summary           → idx:daily_summary         (0 10 * * *)
+# evidence_backup         → idx:evidence_backup       (45 11 * * *)
+# candle_prune            → idx:candle_prune          (15 3 * * *)
+# failed_job_alert        → idx:failed_job_alert      (*/15 * * * *)
+# health_monitor          → idx:health_monitor        (*/5 * * * *)
 
-# Fear & Greed Index = sentimen crypto; dinonaktifkan bersama crypto.
-# sentiment_fetcher:
-#   class: SentimentFetcherJob
-#   schedule: "*/15 * * * *"
-#   queue: default
-#   description: "Fetch Fear & Greed Index"
-
-idx_universe_refresh:
-  command: "IdxUniverseService.refresh!"
-  schedule: "0 22 * * *"              # 22:00 UTC = 05:00 WIB daily
-  queue: default
-  description: "Refresh full IDX universe (all listed companies)"
-
-idx_scanner:
-  class: IdxScannerJob
-  schedule: "30 9 * * 1-5"            # 09:30 UTC = 16:30 WIB weekdays
-  queue: scan
-  description: "Scan all IDX listed stocks, pick top swing candidates"
-
-momentum_snapshot:
-  class: MomentumSnapshotJob
-  schedule: "0 10 * * 1-5"            # 10:00 UTC = 17:00 WIB, setelah idx_scanner (09:30)
-  queue: default
-  description: "Rekam regime + top-10 momentum harian (forward tracking)"
-
-rank_report:
-  class: RankReportJob
-  schedule: "15 10 * * 1-5"           # 10:15 UTC = 17:15 WIB, setelah momentum_snapshot (10:00)
-  args: [ "extended" ]
-  queue: default
-  description: "Laporan momentum harian + kartu BUY untuk pick baru (kirim hanya kalau top-10 berubah)"
-
+# telegram_poller TETAP di sini — GitHub Actions tidak menjamin interval
+# di bawah 5 menit, jadi bot command Telegram akan terasa lambat/hilang
+# kalau dipindah. Ini berarti Puma harus tetap hidup untuk command bot;
+# upgrade ke webhook Telegram (lih. Fase 2 plan) menghapus kebutuhan ini.
 telegram_poller:
   class: TelegramPollerJob
   schedule: "* * * * *"               # tiap menit — poll perintah bot (no-op tanpa admin chat id)
   queue: realtime
   description: "Poll perintah Telegram (admin-only command bot)"
-
-momentum_weekly_report:
-  class: MomentumWeeklyReportJob
-  schedule: "30 10 * * 5"             # Jumat 17:30 WIB — rekonsiliasi momentum vs IHSG vs backtest
-  queue: default
-  description: "Laporan mingguan trust-loop momentum (forward vs backtest + kontrol negatif)"
-
-paper_trade_updater:
-  class: PaperTradeUpdaterJob
-  schedule: "*/5 * * * *"
-  queue: default
-  description: "Update open paper trades"
-
-daily_summary:
-  class: DailySummaryJob
-  schedule: "0 10 * * *"              # 10:00 UTC = 17:00 WIB (sore, post-market)
-  queue: default
-  description: "Send daily Telegram digest: signals, P&L, win rate"
-
-evidence_backup:
-  class: EvidenceBackupJob
-  schedule: "45 11 * * *"              # 11:45 UTC = 18:45 WIB, setelah momentum_snapshot
-  queue: default
-  description: "Backup tabel bukti forward-tracking (momentum_snapshots, paper_trades, trading_signals)"
-
-candle_prune:
-  class: CandlePruneJob
-  schedule: "15 3 * * *"              # daily 03:15 UTC — keep tables bounded
-  queue: default
-  description: "Delete candles older than per-timeframe retention window"
-
-failed_job_alert:
-  class: FailedJobAlertJob
-  schedule: "*/15 * * * *"
-  queue: default
-  description: "Telegram alert for newly failed background jobs"
-
-health_monitor:
-  class: HealthMonitorJob
-  schedule: "*/5 * * * *"
-  queue: default
-  description: "Watchdog: alert on stale data or dead Solid Queue workers"
