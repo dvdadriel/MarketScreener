@@ -293,6 +293,19 @@ adalah pooler (6543), tidak mendukung DDL. Migrasi dari lokal lewat direct URL:
 DATABASE_URL="$SUPABASE_DIRECT_URL" RAILS_ENV=production bin/rails db:prepare
 ```
 
+> **Kenapa `db/structure.sql`, bukan `db/schema.rb`.** App ini pakai
+> `config.active_record.schema_format = :sql` (lihat `config/application.rb`).
+> RLS (`ENABLE ROW LEVEL SECURITY`), `CREATE POLICY`, `GRANT ... TO anon`, dan
+> `CREATE VIEW public.latest_candle_closes` semuanya dibuat lewat `execute(...)`
+> raw SQL di migrasi (`db/migrate/20260828*`). Dumper Ruby (`schema.rb`) diam-
+> diam membuang semuanya itu — sudah diverifikasi: `db:schema:load` dari
+> `schema.rb` menghasilkan database dengan `relrowsecurity = false` di semua
+> tabel, nol policy, nol grant ke `anon`. Kalau format ini pernah diganti balik
+> ke `:ruby`, `db:prepare` di atas akan terlihat sukses (exit 0, tidak ada
+> error) tapi diam-diam menghasilkan database production tanpa RLS/policy/
+> grant/view sama sekali. Jangan ganti balik tanpa memindahkan proteksi itu ke
+> tempat lain dulu.
+
 ### 3.3 Subdomain
 
 - Koyeb → service → Settings → Domains → tambah `idx.domain-anda.com`

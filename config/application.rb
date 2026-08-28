@@ -18,5 +18,12 @@ module CryptoScreener
 
     config.time_zone = "UTC"
     config.active_job.queue_adapter = :solid_queue
+
+    # Several migrations use raw `execute(...)` SQL for RLS policies, grants,
+    # and views (see db/migrate/20260828*). The Ruby schema dumper silently
+    # drops all of that, which would leave a fresh `db:prepare` with no RLS,
+    # no policies, and no views. SQL format (structure.sql via pg_dump)
+    # faithfully captures it. Do NOT switch this back to :ruby.
+    config.active_record.schema_format = :sql
   end
 end
