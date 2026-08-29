@@ -55,3 +55,11 @@ yarn-error.log
 *.bak
 *.bak-*
 supabase_config.txt
+
+# Config tooling Claude Code — lokal saja, bukan bagian aplikasi
+/CLAUDE.md
+/.mcp.json
+
+# Dokumen kerja internal — bukan bagian portofolio publik
+/docs/idx-screener-deploy-plan.md
+/docs/superpowers/
