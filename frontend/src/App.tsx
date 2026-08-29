@@ -5,8 +5,6 @@ import { SignalsTable } from "./components/SignalsTable";
 import { SwingPicks } from "./components/SwingPicks";
 import { MomentumSummary } from "./components/MomentumSummary";
 import { PaperTradeStatsView } from "./components/PaperTradeStatsView";
-import { OpenTrades } from "./components/OpenTrades";
-import { Card } from "./components/Card";
 import type {
   Signal,
   PaperTrade,
@@ -101,11 +99,12 @@ export function App() {
   }, []);
 
   const idxOpen = isIdxOpenNow();
+  const stocksScanned = state.closes?.length ?? 0;
 
   return (
     <div className="min-h-screen bg-zinc-950">
       <header className="sticky top-0 z-50 border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2.5">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-sky-500 text-lg font-black text-white shadow-lg shadow-emerald-500/20">
               ⚡
@@ -121,44 +120,75 @@ export function App() {
               </div>
             </div>
           </div>
-
-          <span
-            className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
-              idxOpen ? "bg-emerald-500/20 text-emerald-300" : "bg-zinc-800 text-zinc-300"
-            }`}
-          >
-            ● IDX {idxOpen ? "OPEN" : "CLOSED"}
-          </span>
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 px-6 py-8">
+      <main className="mx-auto max-w-[1600px] space-y-6 px-6 py-8">
         {loading ? (
           <p className="text-sm text-zinc-500">Memuat...</p>
         ) : (
           <>
-            <Card title="Forward tracking (momentum)" icon="📈">
+            {/* ===== HERO ===== */}
+            <div className="grid grid-cols-1 gap-3">
+              <div className="group relative overflow-hidden rounded-2xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 p-5 text-left">
+                <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-sky-500/5 blur-3xl" />
+                <div className="relative">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-2xl">🇮🇩</span>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-sky-400">
+                      IDX Stocks
+                    </span>
+                    <span
+                      className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        idxOpen ? "bg-emerald-500/20 text-emerald-300" : "bg-zinc-800 text-zinc-400"
+                      }`}
+                    >
+                      {idxOpen ? "● OPEN" : "● CLOSED"}
+                    </span>
+                  </div>
+                  <div className="text-2xl font-bold text-white">
+                    {stocksScanned} <span className="text-sm font-normal text-zinc-500">stocks scanned</span>
+                  </div>
+                  <div className="mt-1 text-xs text-zinc-500">
+                    {state.signals?.length ?? 0} signals · {state.openTrades?.length ?? 0} open trades
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ===== MOMENTUM ===== */}
+            <section className="rounded-2xl border border-violet-900/40 bg-gradient-to-br from-violet-950/30 to-zinc-950 p-6">
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-xl">🚀</span>
+                <h2 className="text-base font-bold text-white">Momentum</h2>
+                <span className="rounded-full bg-violet-500/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-violet-300">
+                  observasi · paper
+                </span>
+              </div>
               <MomentumSummary data={state.momentum} />
-            </Card>
+            </section>
 
-            <Card title="Swing picks (24 jam)" icon="🎯">
+            {/* ===== SWING PICKS ===== */}
+            <section className="rounded-2xl border border-sky-900/40 bg-gradient-to-br from-sky-950/30 to-zinc-950 p-6">
+              <div className="mb-5 flex items-center gap-2">
+                <span className="text-2xl">📈</span>
+                <h2 className="text-lg font-bold text-white">Today's Swing Picks</h2>
+              </div>
               <SwingPicks picks={state.swingPicks} />
-            </Card>
+            </section>
 
-            <Card title="Paper trade stats" icon="📊">
-              <PaperTradeStatsView data={state.paperStats} />
-            </Card>
+            {/* ===== PAPER TRADING + OPEN POSITIONS ===== */}
+            <PaperTradeStatsView data={state.paperStats} openTrades={state.openTrades} />
 
-            <Card title="Open trades" icon="💼">
-              <OpenTrades trades={state.openTrades} />
-            </Card>
-
-            <Card title="Signals terbaru" icon="🔔">
-              <SignalsTable signals={state.signals} closes={state.closes} />
-            </Card>
+            {/* ===== SIGNALS TABLE ===== */}
+            <SignalsTable signals={state.signals} closes={state.closes} />
           </>
         )}
       </main>
+
+      <footer className="mx-auto max-w-[1600px] px-6 py-8 text-center font-mono text-[10px] uppercase tracking-wider text-zinc-700">
+        idxscreener · paper trading mode · no financial advice
+      </footer>
     </div>
   );
 }
