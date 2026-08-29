@@ -1,0 +1,2 @@
+class MomentumTrackerSummary < ApplicationRecord
+end

@@ -6,20 +6,25 @@
 > tepat. Cukup pindahkan ke `docs/deploy-plan.md` kalau ingin nama file yang
 > lebih pendek; tidak perlu pindah repo.
 
-**Arsitektur yang dipilih:**
+**Arsitektur yang dipilih (final):**
 
 ```
 Supabase (Postgres)  ←──  GitHub Actions (job harian, gratis, repo publik)
-        ↑                          │
-        │                          └──→ healthchecks.io (dead man's switch)
+        ↑
+        │  REST API (PostgREST, RLS read-only)
         │
-Fly.io (web dashboard)  ←── idx.domain-anda.com
+React statis (Vercel, gratis, tanpa kartu)  ←── idx.domain-anda.com
 ```
 
-**Prinsipnya:** job harian tidak boleh bergantung pada web service hidup atau tidak.
-GitHub Actions menjalankan Ruby-nya sendiri di runner, jadi dashboard boleh tidur di
-tier gratis tanpa mengganggu riwayat forward tracking — dan riwayat itu yang jadi
-nilai project ini.
+**Prinsipnya:** dashboard portofolio ini murni read-only, jadi tidak butuh server
+Ruby yang hidup 24 jam sama sekali. Job harian (GitHub Actions) menulis ke Supabase;
+frontend statis (Fase 3.5) baca langsung dari situ lewat REST API Supabase. Rails
+cuma dipakai sebagai mesin batch job, tidak pernah di-deploy sebagai web service.
+
+> **Fase 3 (Koyeb) di bawah ini sudah tidak diperlukan** untuk dashboard portofolio
+> — dibiarkan di dokumen ini sebagai referensi kalau suatu saat butuh fitur
+> interaktif (search live, upload ticker, dll) yang memang butuh Rails hidup.
+> Jalur yang benar-benar dipakai sekarang ada di **Fase 3.5**.
 
 ---
 
@@ -230,7 +235,12 @@ Settings → Secrets and variables → Actions:
 
 ---
 
-## Fase 3 — Koyeb (web dashboard)
+## Fase 3 — Koyeb (web dashboard, opsional/tidak dipakai sekarang)
+
+> **Skip fase ini** untuk dashboard portofolio — sudah digantikan Fase 3.5
+> (frontend statis di Vercel), yang tidak butuh server Ruby hidup sama sekali.
+> Bagian di bawah ini relevan lagi kalau nanti Anda benar-benar butuh fitur
+> interaktif (search simbol bebas live, upload ticker lewat web, dll).
 
 > Render dan Fly.io sama-sama mewajibkan kartu kredit untuk verifikasi akun.
 > Koyeb (per pengetahuan saya) masih menawarkan free tier tanpa kartu — **cek
@@ -283,6 +293,19 @@ adalah pooler (6543), tidak mendukung DDL. Migrasi dari lokal lewat direct URL:
 DATABASE_URL="$SUPABASE_DIRECT_URL" RAILS_ENV=production bin/rails db:prepare
 ```
 
+> **Kenapa `db/structure.sql`, bukan `db/schema.rb`.** App ini pakai
+> `config.active_record.schema_format = :sql` (lihat `config/application.rb`).
+> RLS (`ENABLE ROW LEVEL SECURITY`), `CREATE POLICY`, `GRANT ... TO anon`, dan
+> `CREATE VIEW public.latest_candle_closes` semuanya dibuat lewat `execute(...)`
+> raw SQL di migrasi (`db/migrate/20260828*`). Dumper Ruby (`schema.rb`) diam-
+> diam membuang semuanya itu — sudah diverifikasi: `db:schema:load` dari
+> `schema.rb` menghasilkan database dengan `relrowsecurity = false` di semua
+> tabel, nol policy, nol grant ke `anon`. Kalau format ini pernah diganti balik
+> ke `:ruby`, `db:prepare` di atas akan terlihat sukses (exit 0, tidak ada
+> error) tapi diam-diam menghasilkan database production tanpa RLS/policy/
+> grant/view sama sekali. Jangan ganti balik tanpa memindahkan proteksi itu ke
+> tempat lain dulu.
+
 ### 3.3 Subdomain
 
 - Koyeb → service → Settings → Domains → tambah `idx.domain-anda.com`
@@ -296,6 +319,18 @@ cold start. Ini tidak mempengaruhi job harian (jalan di GitHub Actions), hanya
 pengalaman orang yang mengklik tautan.
 
 Kalau tautan ini akan Anda tunjukkan ke recruiter, pertimbangkan Fase 6.
+
+### 3.5 Frontend statis (React) di Vercel
+
+Dashboard read-only sekarang ada di `frontend/` (lihat
+docs/superpowers/specs/2026-08-28-static-portfolio-dashboard-design.md).
+Deploy terpisah dari Rails:
+
+1. Vercel → New Project → import repo, **Root Directory** = `frontend`
+2. Framework preset: Vite (auto-detected dari `vercel.json`)
+3. Environment variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+   (anon key publik Supabase — aman diexpose, itu tujuannya, dibatasi RLS)
+4. Deploy — Vercel kasih URL `*.vercel.app`, tambahkan custom domain kalau mau
 
 ---
 
