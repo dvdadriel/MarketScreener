@@ -6,6 +6,7 @@ import { SwingPicks } from "./components/SwingPicks";
 import { MomentumSummary } from "./components/MomentumSummary";
 import { PaperTradeStatsView } from "./components/PaperTradeStatsView";
 import { OpenTrades } from "./components/OpenTrades";
+import { Card } from "./components/Card";
 import type {
   Signal,
   PaperTrade,
@@ -99,41 +100,65 @@ export function App() {
     load();
   }, []);
 
+  const idxOpen = isIdxOpenNow();
+
   return (
-    <main>
-      <h1>IdxScreener</h1>
-      <p>Market: {isIdxOpenNow() ? "BUKA" : "TUTUP"}</p>
+    <div className="min-h-screen bg-zinc-950">
+      <header className="sticky top-0 z-50 border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-sky-500 text-lg font-black text-white shadow-lg shadow-emerald-500/20">
+              ⚡
+            </div>
+            <div>
+              <div className="text-base font-bold tracking-tight text-white">IdxScreener</div>
+              <div className="flex items-center gap-1.5 text-[10px]">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </span>
+                <span className="font-mono uppercase tracking-wider text-emerald-400">live</span>
+              </div>
+            </div>
+          </div>
 
-      {loading ? (
-        <p>Memuat...</p>
-      ) : (
-        <>
-          <section>
-            <h2>Forward tracking (momentum)</h2>
-            <MomentumSummary data={state.momentum} />
-          </section>
+          <span
+            className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
+              idxOpen ? "bg-emerald-500/20 text-emerald-300" : "bg-zinc-800 text-zinc-300"
+            }`}
+          >
+            ● IDX {idxOpen ? "OPEN" : "CLOSED"}
+          </span>
+        </div>
+      </header>
 
-          <section>
-            <h2>Swing picks (24 jam)</h2>
-            <SwingPicks picks={state.swingPicks} />
-          </section>
+      <main className="mx-auto max-w-5xl space-y-6 px-6 py-8">
+        {loading ? (
+          <p className="text-sm text-zinc-500">Memuat...</p>
+        ) : (
+          <>
+            <Card title="Forward tracking (momentum)" icon="📈">
+              <MomentumSummary data={state.momentum} />
+            </Card>
 
-          <section>
-            <h2>Paper trade stats</h2>
-            <PaperTradeStatsView data={state.paperStats} />
-          </section>
+            <Card title="Swing picks (24 jam)" icon="🎯">
+              <SwingPicks picks={state.swingPicks} />
+            </Card>
 
-          <section>
-            <h2>Open trades</h2>
-            <OpenTrades trades={state.openTrades} />
-          </section>
+            <Card title="Paper trade stats" icon="📊">
+              <PaperTradeStatsView data={state.paperStats} />
+            </Card>
 
-          <section>
-            <h2>Signals terbaru</h2>
-            <SignalsTable signals={state.signals} closes={state.closes} />
-          </section>
-        </>
-      )}
-    </main>
+            <Card title="Open trades" icon="💼">
+              <OpenTrades trades={state.openTrades} />
+            </Card>
+
+            <Card title="Signals terbaru" icon="🔔">
+              <SignalsTable signals={state.signals} closes={state.closes} />
+            </Card>
+          </>
+        )}
+      </main>
+    </div>
   );
 }
